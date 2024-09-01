@@ -1,0 +1,317 @@
+<!DOCTYPE html><head><title>Tank Game</title></head><canvas id=c width=1080 height=1080></canvas><script>c.width=c.height=1080;x=c.getContext`2d`,F=M=0,onload=U=e=>{requestAnimationFrame(U);if(F&&e<M-2)return;M=Math.max(M+1e3/60,e);T=F/60;if(T*60|0!=F++)T+=1e-6;E(T)}
+const TILE_SIZE = 100;
+const HALF_TILE = TILE_SIZE / 2;
+let globalScale = 1;
+let time = tDiff = 0;
+let cameraPos = null;
+let objList = [];
+
+const objToStr = obj => Object.keys(obj).map(key => `${key}: ${obj[key].toString()}`);
+const collided = (a, b) => (
+  !a.delete && !b.delete //centered on middle
+  && a.isFriendly !== b.isFriendly
+  && b.pos.x + (b.size.x / 2) < a.pos.x + (a.size.x / 2)
+  && b.pos.x - (b.size.x / 2) > a.pos.x - (a.size.x / 2)
+  && b.pos.y - (b.size.y / 2) < a.pos.y + (a.size.y / 2)
+  && b.pos.y + (b.size.y / 2) > a.pos.y - (a.size.y / 2)
+);
+
+class Vec2 {
+  constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+  copy()                  { return vec2(this.x, this.y); }
+  scale(s)                { return vec2(this.x * s, this.y * s); }
+  add(v)                  { return vec2(this.x + v.x, this.y + v.y); }
+  subtract(v)             { return vec2(this.x - v.x, this.y - v.y); }
+  addY(vy)                { return vec2(this.x, this.y + vy); }
+  // move vector in direction (angle) `a` (radians) at distance `l`
+  move(a, l)              { return vec2(this.x + l * Math.sin(a), this.y - l * Math.cos(a)); }
+  setAngle(a=0, l=1)      { this.x = l*Math.sin(a); this.y = l*Math.cos(a); return this; }
+  toString()              { return `x: ${~~this.x}, y: ${~~this.y}`; }
+}
+const vec2 = (x,y=x)=>new Vec2(x, y);
+
+class Speed {
+  //direction is -1, 0, or 1 (backward, stop, forward, accelorate)
+  constructor(maxSpeed = 1, direction = 0, accelorate = 0, decelorate = accelorate) {
+    this.maxSpeed = maxSpeed;
+    this.speed = direction * maxSpeed;
+    this.accelorate = accelorate;
+    this.decelorate = decelorate;
+  }
+  move(direction) {
+    if (this.accelorate === 0) {
+      this.speed = this.maxSpeed * direction;
+      // console.log(this.speed)
+    }
+    else if (direction !== 0) {
+      const newSpeed = this.speed + (this.accelorate * tDiff* direction);
+      this.speed = newSpeed < 0 ? Math.max(newSpeed, -this.maxSpeed) : Math.min(newSpeed, this.maxSpeed);
+    }
+    else if (direction === 0 && this.speed !== 0) {
+      if (this.decelorate > 0) {
+        const reverseDirection = this.speed < 0 ? 1 : -1;
+        this.speed += reverseDirection * this.decelorate * tDiff;
+
+        if ((reverseDirection === -1 && this.speed < 0)
+          || (reverseDirection === 1 && this.speed > 0)) this.speed = 0;
+      }
+      else this.speed = 0;
+    }
+  }
+  copy() {
+    const { maxSpeed, speed, accelorate, decelorate } = this;
+    const direction = speed < 0 ? -1 : speed > 0 ? 1 : 0;
+    return new Speed(maxSpeed, direction, accelorate, decelorate);
+  }
+  toString() { return "maxSpeed,speed,accelorate,decelorate".split`,`.map(n => `${n}: ${formatNum(this[n])}`).join`,`; }
+}
+
+const formatNum = n => isNaN(n) ? n : (~~(n * 1e3) / 1e3).toString();
+
+class Timer {
+  constructor(timeLeft) {
+    this.time = timeLeft == undefined ? undefined : time + timeLeft;
+    this.setTime = timeLeft;
+  }
+  set(timeLeft=0) { this.time = time + timeLeft; this.setTime = timeLeft; }
+  unset() { this.time = undefined; }
+  elapsed() { return time > this.time; }
+  getPercent() { return this.isSet()? percent(this.time - time, this.setTime, 0) : 0; }
+}
+// Speed(maxSpeed, direction, accelorate, decelorate)
+
+let SCREEN_SIZE = vec2(1080);
+
+const TANK_COLOR = "blue";
+const TANK_SIZE = vec2(80, 100);
+const TANK_SPEED = new Speed(300, 0, 600, 1000); //per second
+const TANK_ROTATE_SPEED = new Speed(3, 0, 12, 20); //per second
+const TANK_FIRING_RATE = 1; // per second
+const BULLET_SIZE = vec2(10, 10);
+const BULLET_SPEED = new Speed(500, 1);
+
+const MAP_DIMENSIONS = vec2(50, 50);
+const MAP_SIZE = MAP_DIMENSIONS.scale(TILE_SIZE);
+
+const rand = (max, min = 0) => (Math.random() * (max - min)) + min;
+const randVec = v => vec2(rand(v.x), rand(v.y));
+const rect = (pos, size, direction, center, color, scaleParam = 1) => {
+  const scale = scaleParam * globalScale;
+  const relativePos = pos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5))
+  const scaledSize = size.scale(scale);
+  const scaledCenter = (center || size.scale(.5)).scale(scale);
+  if (relativePos.x < -scaledSize.x || relativePos.y < -scaledSize.y
+    || relativePos.x > SCREEN_SIZE.x + scaledSize.x || relativePos.y > SCREEN_SIZE.y + scaledSize.y) return;
+  x.fillStyle = color;
+  x.save();
+  x.translate(relativePos.x, relativePos.y);
+  x.rotate(direction);
+  x.fillRect(-scaledCenter.x, -scaledCenter.y, scaledSize.x, scaledSize.y);
+  x.restore();
+};
+const circle = (pos, size, color) => {
+  const scale = globalScale;
+  const relativePos = pos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5))
+  const scaledSize = size.scale(scale);
+  const scaledCenter = size.scale(.5).scale(scale);
+  if (relativePos.x < -scaledSize.x || relativePos.y < -scaledSize.y
+    || relativePos.x > SCREEN_SIZE.x + scaledSize.x || relativePos.y > SCREEN_SIZE.y + scaledSize.y) return;
+  ;
+  x.fillStyle = color
+  x.save();
+  x.beginPath()
+  x.arc(pos.x,pos.y,size.x,0,Math.PI*2)
+  x.fill()
+  x.restore();
+};
+const cube = (pos, size, direction, center, color, scaleParam = 1, height=1) => {
+  for(i=height;i--;)rect(pos.addY(i*-3), size, direction, center, color, scaleParam);
+};
+const line = (startPos, endPos, color, thickness) => {
+  x.beginPath();
+  x.strokeStyle = color || "red";
+  x.lineWidth = thickness || 3;
+  x.moveTo(startPos.x, startPos.y);
+  x.stroke(x.lineTo(endPos.x, endPos.y));
+};
+const getGridPos = pos => vec2(Math.floor(pos.x / TILE_SIZE), Math.floor(pos.y / TILE_SIZE));
+
+class Object {
+  constructor(pos, size, angle = 0, center, color = "gray", moveSpeed, rotateSpeed) {
+    this.pos = pos;
+    this.gridPos = getGridPos(pos);
+    this.size = size;
+    this.angle = angle;
+    this.center = center || size.scale(.5);
+    this.color = color;
+    this.moveSpeed = moveSpeed || new Speed;
+    this.rotateSpeed = rotateSpeed || new Speed;
+    objList.push(this);
+  }
+
+  move(direction)   { this.moveSpeed.move(direction); }
+  rotate(direction) { this.rotateSpeed.move(direction); }
+
+  update() {
+    if (this.moveSpeed.speed !== 0)
+      this.pos = this.pos.move(this.angle, this.moveSpeed.speed * tDiff);
+    if (this.rotateSpeed.speed !== 0)
+      this.angle = (this.angle + this.rotateSpeed.speed * tDiff) % (Math.PI * 2);
+    this.gridPos = getGridPos(this.pos);
+  }
+  collidedWith(obj) { console.log("collidedWith", obj); }
+  render() {
+    const { pos, size, angle, center, color } = this;
+    rect(pos, size, angle, center, color, pos.y**2);
+  }
+  toString() { return `pos,gridPos,size,angle,center,color,moveSpeed,rotateSpeed`.split`,`.map(n=>`${n}: ${formatNum(this[n])}`); }
+}
+
+class Bullet extends Object {
+  constructor(pos, angle, range, isFriendly) {
+    super(pos, BULLET_SIZE, angle, 0, "red", BULLET_SPEED.copy());
+    this.range = range || 1e3;
+    this.isFriendly = isFriendly;
+  }
+  collidedWith(obj) {
+    new Explosion(this.pos);
+    this.delete = true;
+  }
+  update() {
+    super.update();
+    this.range -= this.moveSpeed.speed * tDiff;
+    if (this.range <= 0) {
+      this.delete = true;
+      new Explosion(this.pos, 50);
+    }
+    const { pos } = this;
+    if(!this.delete)this.delete = pos.x < -HALF_TILE || pos.y < -HALF_TILE || pos.y > MAP_SIZE.y || pos.x > MAP_SIZE.x;
+  }
+  render() {
+    cube(this.pos, this.size, this.angle, 0, "red", 1, 3);
+  }
+}
+
+class Explosion extends Object {
+  constructor(pos, size = 20) {
+    super(pos, vec2(size));
+    this.timeLeft = new Timer(.5);
+  }
+  update() {
+    if (this.timeLeft.elapsed()) this.delete = true;
+  }
+  render() {
+    const halfSize = this.size.scale(-.5);
+    const randSize = randVec(this.size);
+    circle(randVec(this.pos.add(randVec(halfSize))), randVec(this.size), "red");
+  }
+}
+
+class Tank extends Object {
+  constructor(pos, angle, isFriendly) {
+    super(pos, TANK_SIZE, angle, null, TANK_COLOR, TANK_SPEED.copy(), TANK_ROTATE_SPEED.copy());
+    this.lastFired = new Timer(TANK_FIRING_RATE);
+    this.hp = 5;
+    this.isFriendly = isFriendly;
+  }
+  update() {
+    super.update();
+    if (this.isFiring && this.lastFired.elapsed()) {
+      new Bullet(this.pos.addY(-9).move(this.angle, TANK_SIZE.y / 2), this.angle, 1e3, this.isFriendly);
+      this.lastFired.set(TANK_FIRING_RATE);
+      this.isFiring = false;
+    }
+  }
+  render() {
+    const { pos, size, angle, center, color } = this;
+    //body
+    cube(pos, size, angle, center, color, 1, 3);
+    //cannon
+    cube(pos.addY(-11), vec2(20, 70), angle, vec2(10, 60), "red", 1, 3);
+    //cannon head
+    cube(pos.addY(-9), vec2(40, 50), angle, vec2(20, 20), "gray", 1, 4);
+  }
+  toString() { return [...super.toString(), `isFiring: ${this.isFiring}`]; }
+}
+
+class EnemyTank extends Tank {
+  constructor(pos) {
+    super(pos, 0, false);
+    this.color = "orange";
+  }
+}
+
+const drawMap = () => {
+  let tileScale, tilePos, tileSize;
+  for (i = MAP_DIMENSIONS.x; i--;) for (j = MAP_DIMENSIONS.y; j--;) {
+    tilePos = vec2(i, j).scale(TILE_SIZE);
+    tileSize = vec2(TILE_SIZE * .9);
+    rect(tilePos, tileSize, 0, 0, "#AFA")
+  }
+};
+
+const player = new Tank(vec2(10, 10).scale(TILE_SIZE), 0, true);
+
+for (i = 10; i--;) new EnemyTank(vec2(i * 3 + 3, 5).scale(TILE_SIZE));
+
+const keys = {};
+onkeydown=onkeyup=e=> {
+  //wasd, zqsd, arrow keys
+  keys[`s****lurd${"*".repeat(24)}l**r************l*d***u**u`[e.which-32]]=e.type[5]
+};
+
+window.addEventListener("wheel", e => {
+  const direction = (e.detail < 0) ? 1 : (e.wheelDelta > 0) ? 1 : -1;
+  globalScale = Math.min(3, Math.max(0.2, globalScale + direction * .2));
+});
+
+E=t=>{x.reset(tDiff = t - time)//loop and clear canvas
+time = t;
+
+// player controls
+player.move(keys.u ? 1 : keys.d ? -1 : 0);
+player.rotate(keys.r ? 1 : keys.l ? -1 : 0);
+player.isFiring = keys.s;
+
+// update
+objList = objList.filter(o => !o.delete).sort((a, b) => (a.pos.y - a.size.y / 2) - (b.pos.y - b.size.y / 2));
+cameraPos = player.pos;
+for(o of objList)o.update();
+
+//check collisions
+const len = objList.length;
+// const gridRef = objList.reduce((prev, o)=>(
+//   index=`${o.gridPos.x},${o.gridPos.y}`,
+//   prev[index]=[...(prev[index]||[]), o],
+//   prev
+// ),{});
+// const gridX = o.gridPos.x;
+// const gridY = o.gridPos.x;
+// for(o of objList){
+//   for(i=3;i--;)
+//   for(j=3;j--;)
+//   for(p of (gridRef[`${gridX+i-1},${gridY+j-1}`]||[]))
+//   if (o.isFriendly === p.isFriendly && collided(o, p)) { o.collidedWith(p); p.collidedWith(o); }
+// }
+for(i=0;i<len-1;i++)for(j=i+1;j<len;j++)if(collided(o=objList[i], p=objList[j])){o.collidedWith(p);p.collidedWith(o);}
+
+// render
+drawMap();
+for(o of objList)o.render()
+
+// draw stats
+x.font="16px'";
+x.fillStyle="black";
+let startPos = vec2(50, 30);
+[
+  `objList.length: ${objList.length}`,
+  ...player.toString(),
+  ...objList.filter(o => o instanceof Bullet).map(o => o.toString().join`, `),
+  JSON.stringify(keys)
+].map((s, i) => x.fillText(s, startPos.x, startPos.y + (i * 30)))
+
+
+
+
+
+/*end of loop*/}</script><style>html,body{background:#222;display:flex;justify-content:center;align-items:center;height:100%;margin:0}#c{background:white;max-height:100%;max-width:100%}
