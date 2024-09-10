@@ -1,446 +1,70 @@
-<!DOCTYPE html><head><title>Tank Game</title></head><canvas id=c width=1080 height=1080></canvas>
-<script src="ZzFXMicro.min.js"></script><script>c.width=c.height=1080;x=c.getContext`2d`,F=M=0,onload=U=e=>{requestAnimationFrame(U);if(F&&e<M-2)return;M=Math.max(M+1e3/60,e);T=F/60;if(T*60|0!=F++)T+=1e-6;E(T)}
-const SOUND = {
-  boom: () => zzfx(...[1,,51,.03,.17,.19,2,2.1,7,-20,,,.07,,,,.17,.56,.14,.25]),
-  powerUp: () => zzfx(...[,,119,,.19,.09,2,2.3,-6,-13,,,,,,,.25,.86,.14,,-1258]),
-  shoot: () => zzfx(...[1,,684,.05,.1,0,1,3,.2,,,,,.4,137,1,,.7,,,204]),
+<!DOCTYPE html><head><title>Unit Game</title></head><canvas id=c width=1080 height=1080></canvas>
+<script src="ZzFXMicro.min.js"></script>
+<script src="config.js"></script>
+<script src="utils.js"></script>
+<script src="GameObject.js"></script>
+<script src="LevelMap.js"></script>
+<script src="gameObjects.js"></script>
+<script>
+const SCENES = {
+  START: 1,
+  LEVEL: 2,
+  GAMEOVER: 3,
 };
-const STATE = {
-  PATROLLING: 1,
-  ATTACK: 2,
-};
-const WEAPONS = {
-  STANDARD: {
-    speed: 1,
-    range: 20,
-    fireRate: .3,
-    explosion: {
-      size: 20,
-      color: 20,
-      duration: 20,
-    },
-  }
-}
-const PI2 = Math.PI * 2;
-const TILE_SIZE = 100;
-const HALF_TILE = TILE_SIZE / 2;
-const [NO_COLLISION, TEAM_FRIEND, TEAM_ENEMY, TEAM_ENV] = [0,1,2];
 let globalScale = 1;
 let time = tDiff = 0;
+let scene = 1;
 let cameraPos = null;
 let objList = [];
-
-const objToStr = obj => Object.keys(obj).map(key => `${key}: ${obj[key].toString()}`);
-const collided = (a, b) => {
-  const aSize = Math.max(a.size.x, a.size.y);
-  const bSize = Math.max(b.size.x, b.size.y);
-  return (
-    !a.delete && !b.delete //centered on middle
-    && o.team !== NO_COLLISION && p.team !== NO_COLLISION
-    && ((a.isSolid && b.isSolid) || a.team !== b.team)
-    && b.pos.x + (bSize / 2) < a.pos.x + (aSize / 2)
-    && b.pos.x - (bSize / 2) > a.pos.x - (aSize / 2)
-    && b.pos.y - (bSize / 2) < a.pos.y + (aSize / 2)
-    && b.pos.y + (bSize / 2) > a.pos.y - (aSize / 2)
-  );
-};
-
-class Vec2 {
-  constructor(x = 0, y = 0) { this.x = x; this.y = y; }
-  copy()                  { return vec2(this.x, this.y); }
-  scale(s)                { return vec2(this.x * s, this.y * s); }
-  add(v)                  { return vec2(this.x + v.x, this.y + v.y); }
-  subtract(v)             { return vec2(this.x - v.x, this.y - v.y); }
-  addX(vx)                { return vec2(this.x + vx, this.y); }
-  addY(vy)                { return vec2(this.x, this.y + vy); }
-  // move vector in direction (angle) `a` (radians) at distance `l`
-  move(a, l)              { return vec2(this.x + l * Math.sin(a), this.y - l * Math.cos(a)); }
-  setAngle(a=0, l=1)      { this.x = l*Math.sin(a); this.y = l*Math.cos(a); return this; }
-  equals(v)               { return this.x === v.x && this.y === v.y; }
-  toString()              { return `x: ${~~this.x}, y: ${~~this.y}`; }
-}
-const vec2 = (x,y=x)=>new Vec2(x, y);
-const angleRadians = (v1, v2) => normalizeRad(Math.atan2(v2.y - v1.y, v2.x - v1.x) + Math.PI / 2);
-const normalizeRad = rad => rad < 0 ? rad + PI2 : rad % PI2;
-const distance = (v1, v2) => Math.hypot(v2.x - v1.x, v2.y - v1.y);
-
-class Speed {
-  //direction is -1, 0, or 1 (backward, stop, forward, accelorate)
-  constructor(maxSpeed = 1, direction = 0, accelorate = 0, decelorate = accelorate) {
-    this.maxSpeed = maxSpeed;
-    this.speed = direction * maxSpeed;
-    this.accelorate = accelorate;
-    this.decelorate = decelorate;
-  }
-  move(direction) {
-    if (this.accelorate === 0) {
-      this.speed = this.maxSpeed * direction;
-    }
-    else if (direction !== 0) {
-      const newSpeed = this.speed + (this.accelorate * tDiff* direction);
-      this.speed = newSpeed < 0 ? Math.max(newSpeed, -this.maxSpeed) : Math.min(newSpeed, this.maxSpeed);
-    }
-    else if (direction === 0 && this.speed !== 0) {
-      if (this.decelorate > 0) {
-        const reverseDirection = this.speed < 0 ? 1 : -1;
-        this.speed += reverseDirection * this.decelorate * tDiff;
-
-        if ((reverseDirection === -1 && this.speed < 0)
-          || (reverseDirection === 1 && this.speed > 0)) this.speed = 0;
-      }
-      else this.speed = 0;
-    }
-  }
-  copy() {
-    const { maxSpeed, speed, accelorate, decelorate } = this;
-    const direction = speed < 0 ? -1 : speed > 0 ? 1 : 0;
-    return new Speed(maxSpeed, direction, accelorate, decelorate);
-  }
-  toString() { return "maxSpeed,speed,accelorate,decelorate".split`,`.map(n => `${n}: ${formatNum(this[n])}`).join`,`; }
-}
-
-const formatNum = n => isNaN(n) ? n : (~~(n * 1e3) / 1e3).toString();
-
-class Timer {
-  constructor(timeLeft) {
-    this.time = timeLeft == undefined ? undefined : time + timeLeft;
-    this.setTime = timeLeft;
-  }
-  set(timeLeft=0) { this.time = time + timeLeft; this.setTime = timeLeft; }
-  unset() { this.time = undefined; }
-  elapsed() { return time > this.time; }
-  getPercent() { return this.isSet()? percent(this.time - time, this.setTime, 0) : 0; }
-}
-// Speed(maxSpeed, direction, accelorate, decelorate)
-
 let SCREEN_SIZE = vec2(1080);
 
-const TANK_COLOR = "blue";
+let DEBUG_COLLISIONS = [];
+
+const TANK_COLOR = BLUE;
 const TANK_SIZE = vec2(80, 100);
 const TANK_SPEED = new Speed(300, 0, 600, 1000); //per second
 const TANK_ROTATE_SPEED = new Speed(3, 0, 12, 20); //per second
 const TANK_FIRING_RATE = 1; // per second
 const BULLET_SIZE = 10;
-const BULLET_EXPLOSION_SIZE = 40;
 const BULLET_SPEED = new Speed(500, 1);
 
-const MAP_DIMENSIONS = vec2(50, 50);
-const MAP_SIZE = MAP_DIMENSIONS.scale(TILE_SIZE);
+const MAP_DIMENSIONS = vec2(20);
 
-const rand = (max, min = 0) => (Math.random() * (max - min)) + min;
-const randVec = v => vec2(rand(v.x), rand(v.y));
-const text = (str, pos, fontSize, angle, color, scaleParam = 1) => {
-  const scale = scaleParam * globalScale;
-  const relativePos = pos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5))
-  x.fillStyle = color;
-  x.save();
-  x.translate(relativePos.x, relativePos.y);
-  x.rotate(angle);
-  x.fontSize = scale * fontSize;
-  x.fillText(str, 0, 0);
-  x.restore();
-};
-const rect = (pos, size, angle, center, color, scaleParam = 1, isLine) => {
-  const scale = scaleParam * globalScale;
-  const relativePos = pos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5))
-  const scaledSize = size.scale(scale);
-  const scaledCenter = (center || size.scale(.5)).scale(scale);
-  if (relativePos.x < -scaledSize.x || relativePos.y < -scaledSize.y
-    || relativePos.x > SCREEN_SIZE.x + scaledSize.x || relativePos.y > SCREEN_SIZE.y + scaledSize.y) return;
-  x.fillStyle = color;
-  x.strokeStyle = color;
-  x.save();
-  x.translate(relativePos.x, relativePos.y);
-  x.rotate(angle);
-  if (isLine) {
-    x.lineWidth = scale;
-    x.strokeRect(-scaledCenter.x, -scaledCenter.y, scaledSize.x, scaledSize.y)
-  }
-  else {
-    x.fillRect(-scaledCenter.x, -scaledCenter.y, scaledSize.x, scaledSize.y);
-  }
-  x.restore();
-};
-const circle = (pos, size, color) => {
-  const scale = 1 * globalScale;
-  const relativePos = pos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5))
-  const scaledSize = size.scale(scale);
-  const scaledCenter = size.scale(.5).scale(scale);
-  if (relativePos.x < -scaledSize.x || relativePos.y < -scaledSize.y
-    || relativePos.x > SCREEN_SIZE.x + scaledSize.x || relativePos.y > SCREEN_SIZE.y + scaledSize.y)
-    return;
-  x.beginPath();
-  x.arc(relativePos.x, relativePos.y, scaledSize.x, 0, PI2);
-  x.fillStyle = color;
-  x.fill();
-};
-const cube = (pos, size, direction, center, color, height=1, scaleParam=1) => {
-  for(i=height;i--;)rect(pos.addY(i*-3), size, direction, center, color, scaleParam);
-  rect(pos.addY(height* -3), size, direction, center, "gray", scaleParam, true);
-};
-const line = (startPos, endPos, color, thickness) => {
-  x.beginPath();
-  x.strokeStyle = color || "red";
-  x.lineWidth = thickness || 3;
-  x.moveTo(startPos.x, startPos.y);
-  x.stroke(x.lineTo(endPos.x, endPos.y));
-};
-const getGridPos = pos => vec2(Math.floor(pos.x / TILE_SIZE), Math.floor(pos.y / TILE_SIZE));
+const SPAWN_ENEMIES = 0;
+const THINK_RATE = .02;
+const PLAYER_DETECT_RANGE = 700;
+const ENEMY_ATTACK_RANGE = 300;
 
-class Object {
-  constructor(pos, size, angle = 0, center, color = "gray", moveSpeed, rotateSpeed, isSolid, team=NO_COLLISION, hp = 1) {
-    this.pos = pos;
-    this.gridPos = getGridPos(pos);
-    this.size = size;
-    this.angle = angle;
-    this.center = center || size.scale(.5);
-    this.color = color;
-    this.moveSpeed = moveSpeed || new Speed;
-    this.rotateSpeed = rotateSpeed || new Speed;
-    this.isSolid = isSolid;
-    this.team = team; // 0=Neutral, 1=Friendly, 2=Enemy, 3=Environment
-    this.hp = hp;
-    this.lastFlash = null;
-    this.isDead = false;
+// const renderFloor = currMap => {
+//   let tileScale, tilePos, tileSize;
+//   const size = currMap.dimensions.scale(TILE_SIZE);
+//   const HALF_TILE_VEC = vec2(HALF_TILE);
+//   for (i = currMap.dimensions.x; i--;) for (j = currMap.dimensions.y; j--;) {
+//     tilePos = vec2(i, j).scale(TILE_SIZE).add(HALF_TILE_VEC);
+//     tileSize = vec2(TILE_SIZE * .9);
+//     rect(tilePos, tileSize, 0, 0, GRAY);
+//   }
+//   const HALF_MAP_WIDTH = vec2(MAP_SIZE.x / 2);
+//   for(i=3;i--;)for(j=3;j--;){
+//     if (!(i === 1 && j === 1)) new Wall(vec2(MAP_SIZE.x * (i-1), MAP_SIZE.y * (j-1)).add(HALF_MAP_WIDTH), MAP_SIZE);
+//   }
+// };
 
-    objList.push(this);
-  }
+const currMap = new LevelMap({pathLen: 4, cellSize: 1e3});
+const player = new PlayerUnit(currMap.size.scale(.5), 1);
 
-  move(direction)   { this.moveSpeed.move(direction); }
-  rotate(direction) { this.rotateSpeed.move(direction); }
-
-  update() {
-    const { moveSpeed, pos, size, angle, rotateSpeed, hp, isDead } = this;
-    if (moveSpeed.speed !== 0)
-      this.pos = pos.move(angle, moveSpeed.speed * tDiff);
-    if (rotateSpeed.speed !== 0) {
-      const newAngle = (angle + rotateSpeed.speed * tDiff);
-      this.angle = newAngle >= 0 ? (newAngle % PI2) : (PI2 + newAngle);
-    }
-    this.gridPos = getGridPos(pos);
-    if (hp <= 0 && !isDead) {
-      new Explosion(this.pos.copy(), size, 2);
-      this.isDead = true;
-    }
-  }
-  collidedWith(obj) {
-    console.log("collidedWith", obj);
-    if (obj instanceof Bullet) {
-      this.hp -= obj.damage;
-      this.lastFlash = new Timer(.05);
-      this.pos = this.pos.move(obj.angle, obj.pushBack);
-    }
-  }
-  render() {
-    const { pos, size, angle, center, color } = this;
-    rect(pos, size, angle, center, color);
-  }
-  toString() { return `pos,gridPos,size,angle,center,color,moveSpeed,rotateSpeed`.split`,`.map(n=>`${n}: ${formatNum(this[n])}`); }
-}
-
-class Bullet extends Object {
-  constructor(pos, angle, range, team) {
-    super(pos, vec2(BULLET_SIZE), angle, 0, "red", BULLET_SPEED.copy(), null, false, team);
-    this.range = range || 40;
-    this.explosionSize = BULLET_EXPLOSION_SIZE;
-    this.damage = 1;
-    this.pushBack = 10;
-    SOUND.shoot();
-  }
-  collidedWith(obj) {
-    new Explosion(this.pos.copy(), this.explosionSize);
-    this.delete = true;
-  }
-  update() {
-    super.update();
-    this.range -= this.moveSpeed.speed * tDiff;
-    if (this.range <= 0) {
-      this.delete = true;
-      new Explosion(this.pos, BULLET_EXPLOSION_SIZE / 2);
-    }
-    const { pos } = this;
-    if(!this.delete)this.delete = pos.x < -HALF_TILE || pos.y < -HALF_TILE || pos.y > MAP_SIZE.y || pos.x > MAP_SIZE.x;
-  }
-  render() {
-    cube(this.pos, this.size, this.angle, 0, "red", 3);
-  }
-  toString() {
-    return [`range: ${this.range}`, ...super.toString()]
-  }
-}
-
-class Explosion extends Object {
-  constructor(pos, size = 20, timeLen) {
-    super(pos, vec2(size));
-    this.timeLeft = new Timer(timeLen || .3);
-    SOUND.boom();
-  }
-  update() {
-    if (this.timeLeft.elapsed()) this.delete = true;
-  }
-  render() {
-    if (!this.timeLeft.elapsed()) {
-      const halfSize = this.size.scale(.5);
-      const randSize = randVec(halfSize);
-      //random explosion
-      const randPos = this.pos.add(randVec(this.size).subtract(halfSize));
-      circle(randPos, randVec(this.size), "red");
-    }
-  }
-}
-
-class Tank extends Object {
-  constructor(pos, angle, team) {
-    // constructor(pos, size, angle = 0, center, color = "gray", moveSpeed, rotateSpeed, isSolid, team=NO_COLLISION) {
-    super(pos, TANK_SIZE, angle, null, TANK_COLOR, TANK_SPEED.copy(), TANK_ROTATE_SPEED.copy(), true, team);
-    this.lastFired = new Timer(TANK_FIRING_RATE);
-    this.maxHp = this.hp = 3;
-  }
-  update() {
-    super.update();
-    if (this.isFiring && this.lastFired.elapsed()) {
-      new Bullet(this.pos.addY(-9).move(this.angle, TANK_SIZE.y / 2), this.angle, 300, this.team);
-      this.lastFired.set(TANK_FIRING_RATE);
-      this.isFiring = false;
-    }
-    const { lastPushTimer } = this;
-    if (lastPushTimer) {
-      console.log(this.lastPushAngle, this.lastPushBack);
-      console.log("lastPushTimer", lastPushTimer);
-      this.pos = pos.move(this.lastPushAngle, this.lastPushBack);
-      if (this.lastPushTimer.elapsed()) this.lastPushTimer = null;
-    }
-  }
-  render() {
-    const { pos, size, angle, center, color, hp, maxHp, lastFlash } = this;
-    const flash = hp > 0 && !!lastFlash && !lastFlash.elapsed();
-
-    //body
-    cube(pos, size, angle, center, flash ? "#FFF" : color, 3);
-    if (hp > 0) {
-      //cannon
-      cube(pos.addY(-11), vec2(20, 70), angle, vec2(10, 60), flash ? "#FFF" : "red", 3);
-      //cannon head
-      cube(pos.addY(-9), vec2(40, 50), angle, vec2(20, 20), flash ? "#FFF" : "gray", 4);
-    }
-    else {
-      cube(pos.addY(-9), vec2(40, 40), angle, vec2(20, 20), "black", 1);
-    }
-
-    rect(pos, size, 0, center, color, 1, 1);
-    if (hp > 0) {
-      const hpPos = pos.addX(size.x * 1.2);
-      const hpSize = vec2(20);
-      const hpDiff = maxHp - hp;
-      cube(hpPos, hpSize, 1, 0, flash ? "EFFF" : "green", maxHp * 3);
-      cube(hpPos.addY(-(maxHp - hpDiff) * 9), hpSize, 1, 0, flash ? "EFFF" : "red", hpDiff * 3);
-    }
-  }
-  toString() { return [...super.toString(), `isFiring: ${this.isFiring}`]; }
-}
-
-const ENEMY_THINK_RATE = .05;
-const PLAYER_DETECT_RANGE = 800;
-const ENEMY_ATTACK_RANGE = 400;
-class EnemyTank extends Tank {
-  constructor(pos) {
-    super(pos, 1, TEAM_ENEMY);
-    this.color = "orange";
-    this.state = STATE.PATROLLING;
-    this.patrolPointA = this.pos.copy();
-    this.patrolPointB =
-    this.targetDest = this.pos.addX(1300);
-    this.thinkTimer = new Timer(ENEMY_THINK_RATE);
-    this.rotateDirection = 1;
-    this.moveDirection = 0;
-  }
-
-  update() {
-    if (this.isDead) return;
-    super.update();
-    this.rotate(this.rotateDirection);
-    this.move(this.moveDirection);
-
-    console.log("this.rotateDirection, this.moveDirection", this.rotateDirection, this.moveDirection);
-    if (this.thinkTimer.elapsed()) {
-      if (this.state === STATE.PATROLLING) {
-        if (this.rotateDirection !== 0) {
-          const targetAngle = angleRadians(this.pos, this.targetDest);
-          const A = Math.floor(this.angle)
-          const B = Math.floor(targetAngle)
-          if (A === B) {
-            this.angle = Math.floor(targetAngle * 100) / 100;
-            this.moveDirection = 1;
-            this.rotateDirection = 0;
-          }
-        }
-        else if (this.moveDirection !== 0) {
-          const targetAngle = angleRadians(this.pos, this.targetDest);
-          this.rotateDirection = this.angle < targetAngle ? 1 : -1;
-          if (distance(this.pos, this.targetDest) < 100) {
-            console.log("destination reached", this.targetDest);
-            this.targetDest = this.targetDest.equals(this.patrolPointA) ? this.patrolPointB : this.patrolPointA;
-            const newTargetAngle = angleRadians(this.pos, this.targetDest);
-            this.rotateDirection = this.angle < newTargetAngle ? 1 : -1;
-            this.moveDirection = 0;
-          }
-        }
-        if (distance(this.pos, player.pos) <= PLAYER_DETECT_RANGE) {
-          this.state = STATE.ATTACK;
-        }
-      }
-      else if (this.state === STATE.ATTACK) {
-        this.isFiring = false;
-        if (this.rotateDirection !== 0) {
-          const targetAngle = angleRadians(this.pos, player.pos);
-          const A = Math.floor(this.angle)
-          const B = Math.floor(targetAngle)
-          if (A === B) {
-            this.angle = Math.floor(targetAngle * 100) / 100;
-            this.moveDirection = 1;
-            this.rotateDirection = 0;
-          }
-        }
-        else if (this.moveDirection !== 0) {
-          const targetAngle = angleRadians(this.pos, player.pos);
-          this.rotateDirection = this.angle < targetAngle ? 1 : -1;
-          if (distance(this.pos, player.pos) < ENEMY_ATTACK_RANGE) {
-            this.isFiring = true;
-          }
-        }
-        if (distance(this.pos, player.pos) <= PLAYER_DETECT_RANGE) {
-          this.state = STATE.ATTACK;
-        }
-      }
-      this.thinkTimer.set(ENEMY_THINK_RATE);
-    }
-  }
-  render() {
-    circle(this.targetDest, vec2(50), "purple");
-    super.render();
-    const targetAngle = angleRadians(this.pos, this.targetDest);
-    text(`${this.angle} === ${targetAngle}`, this.pos, 20, 0, "black");
-    //text(str, pos, fontSize, angle, color, scaleParam = 1)
-  }
-}
-
-const drawMap = () => {
-  let tileScale, tilePos, tileSize;
-  for (i = MAP_DIMENSIONS.x; i--;) for (j = MAP_DIMENSIONS.y; j--;) {
-    tilePos = vec2(i, j).scale(TILE_SIZE);
-    tileSize = vec2(TILE_SIZE * .9);
-    rect(tilePos, tileSize, 0, 0, "#AFA")
-  }
-};
-
-const player = new Tank(vec2(10, 10).scale(TILE_SIZE), 0, TEAM_FRIEND);
-
-for (i = 10; i--;) new EnemyTank(vec2(i * 3 + 3, 5).scale(TILE_SIZE));
+for (i = SPAWN_ENEMIES; i--;) new EnemyUnit(vec2(i * 3 + 3, 5).scale(TILE_SIZE));
 
 const keys = {};
 onkeydown=onkeyup=e=> {
-  //wasd, zqsd, arrow keys
-  keys[`s****lurd${"*".repeat(24)}l**r************l*d***u**u`[e.which-32]]=e.type[5]
+  //wasd, zqsd, arrow keys, space
+  // - u, l, r, d: WASD/ZQSD/arrow keys
+  // - s: space
+  // - S: shift
+  // - E: enter
+  // - R, T, Y, X, C, V, B, N, F, J: letters
+  // Ex: if(keys.r) { /* move to the right */ }
+  keys['E**S***************s****lurd************************lBCr*F***J***N**lRdT*VuXYu'[e.which-13]]=e.type[5]
 };
 
 window.addEventListener("wheel", e => {
@@ -448,28 +72,30 @@ window.addEventListener("wheel", e => {
   globalScale = Math.min(3, Math.max(0.2, globalScale + direction * .2));
 });
 
-E=t=>{x.reset(tDiff = t - time)//loop and clear canvas
+/***************************/ E=t=>{x.reset(tDiff = t - time)//loop and clear canvas
 time = t;
 
 // player controls
-player.move(keys.u ? 1 : keys.d ? -1 : 0);
-player.rotate(keys.r ? 1 : keys.l ? -1 : 0);
-player.isFiring = keys.s;
+if (!player.isDead) {
+  player.move(keys.u ? 1 : keys.d ? -1 : 0);
+  player.rotate(keys.r ? 1 : keys.l ? -1 : 0);
+  player.isFiring = keys.s;
+}
 
 // update
-objList = objList.filter(o => !o.delete).sort((a, b) => (a.pos.y - a.size.y / 2) - (b.pos.y - b.size.y / 2));
-cameraPos = player.pos;
+objList = objList.filter(o => !o.delete).sort((a, b) => a.isDead ? -1 : (a.pos?.y - a.center.y) - (b.pos?.y - b.center.y));
+cameraPos = player.pos.copy();
 for(o of objList)o.update();
 
 //check collisions
+DEBUG_COLLISIONS = [];
 const len = objList.length;
-for(i=0;i<len-1;i++)
-for(j=i+1;j<len;j++)
+for(i=0;i<len-1;i++)for(j=i+1;j<len;j++)
 if(collided(o=objList[i],p=objList[j])){o.collidedWith(p);p.collidedWith(o);}
 
 // render
-drawMap();
-for(o of objList)o.render()
+currMap.render(time);
+for(o of objList)o.render(time)
 
 // draw stats
 x.font="16px'";
@@ -480,11 +106,22 @@ let startPos = vec2(50, 30);
   ...player.toString(),
   ...objList[2].toString(),
   ...objList.filter(o => o instanceof Bullet).map(o => o.toString().join`, `),
-  JSON.stringify(keys)
+  JSON.stringify(keys),
+  ...DEBUG_COLLISIONS,
 ].map((s, i) => x.fillText(s, startPos.x, startPos.y + (i * 30)))
 
 
 
 
 
-/*end of loop*/}</script><style>html,body{background:#222;display:flex;justify-content:center;align-items:center;height:100%;margin:0}#c{background:white;max-height:100%;max-width:100%}
+/*end of loop*/};c.width=c.height=1080;x=c.getContext`2d`,F=M=0,onload=U=e=>{requestAnimationFrame(U);if(F&&e<M-2)return;M=Math.max(M+1e3/60,e);T=F/60;if(T*60|0!=F++)T+=1e-6;E(T)}
+</script><style>html,body{background:#222;display:flex;justify-content:center;align-items:center;height:100%;margin:0}#c{background:white;max-height:100%;max-width:100%}
+
+/*disable text highlight. Source: https://github.com/xem/miniGameTemplate/blob/gh-pages/index.html*/
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
