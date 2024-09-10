@@ -2,9 +2,12 @@ const TILE_SIZE = 100;
 const HALF_TILE = TILE_SIZE / 2;
 
 const SOUND = {
-  boom: () => zzfx(...[1,,51,.03,.17,.19,2,2.1,7,-20,,,.07,,,,.17,.56,.14,.25]),
-  powerUp: () => zzfx(...[,,119,,.19,.09,2,2.3,-6,-13,,,,,,,.25,.86,.14,,-1258]),
-  shoot: () => zzfx(...[1,,684,.05,.1,0,1,3,.2,,,,,.4,137,1,,.7,,,204]),
+  "boom": () => zzfx(...[.7,,51,.03,.17,.19,2,2.1,7,-20,,,.07,,,,.17,.56,.14,.25]),
+  "powerUp": () => zzfx(...[,,119,,.19,.09,2,2.3,-6,-13,,,,,,,.25,.86,.14,,-1258]),
+  "shoot": () => zzfx(...[1,,684,.05,.1,0,1,3,.2,,,,,.4,137,1,,.7,,,204]),
+  "death": () => zzfx(...[1.6,,618,.1,.08,.29,3,2.4,,-98,,,,,126,.1,.17,.51,.33,.1]),
+  "plasma": () => zzfx(...[,,143,.02,.03,.14,2,.5,-14,-11,,,,,14,,.05,.96,.12]),
+  "plasmaHit": ()=>zzfx(...[.3,,359,.1,.19,.2,3,3.6,5.9,,,,.07,,104,,,-0.02,.1]),
 };
 const STATE = {
   PATROL: 1,
@@ -46,10 +49,15 @@ const WEAPON = {
     firingRate: 1, // fire every {firingRate} second(s)
     damage: 0,
   },
-  "MACHINE_GUN": {
+  "PLASMA_GUN": {
     size: 5,
     speed: 900,
     range: 400,
+    sound: "plasma",
+    explosion: {
+      size: 5,
+      sound: "plasmaHit",
+    },
     color: YELLOW,
     type: SHOOT_PATTERN.DOUBLE,
     firingRate: .2, // fire every {firingRate} second(s)
@@ -78,7 +86,7 @@ const UNIT = {
     size: [80, 100],
     speed: [300, 0, 600, 1000], //maxSpeed = 1, direction = 0, accelorate = 0, decelorate = accelorate
     rotateSpeed: [3, 0, 12, 20],
-    weaponName: "MACHINE_GUN",
+    weaponName: "PLASMA_GUN",
     hp: 3,
     render: t => {
 

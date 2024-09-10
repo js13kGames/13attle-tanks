@@ -1,12 +1,13 @@
 class Explosion extends GameObject {
-  constructor({pos, size = 20, pushBack = 20, damage = 0, timeLen, team}) {
+  constructor({pos, size = 20, pushBack = 20, damage = 0, timeLen, team, sound = "boom"}) {
     super({pos, size: vec2(size), team});
     this.timeLeft = new Timer(timeLen || .3);
     this.pushBack = pushBack;
     this.damage = damage;
-    SOUND.boom();
+    SOUND[sound]();
   }
   update() {
+    super.update();
     if (this.timeLeft.elapsed()) this.delete = true;
   }
   collidedWith(obj) {
@@ -34,7 +35,7 @@ class Bullet extends GameObject {
     this.range = weapon.range || 40;
     this.damage = 1;
     this.pushBack = 10;
-    SOUND.shoot();
+    SOUND[weapon.sound || "shoot"]();
   }
   collidedWith(obj) {
     const { pos, team, weapon } = this;
@@ -96,7 +97,6 @@ class Wall extends GameObject {
 class Unit extends GameObject {
   constructor({pos, angle, team, unitName}) {
     const unit = UNIT[unitName];
-    console.log(unitName, unit, unit.weaponName)
     const weapon = WEAPON[unit.weaponName];
     super({
       pos,
@@ -171,14 +171,16 @@ class PlayerUnit extends Unit {
 
 class SmartUnit extends Unit {
   constructor({pos, team, unitName, state}) {
-    const unit = UNIT[unitName];
     super({pos, angle: 1, team, unitName, state});
+    const unit = UNIT[unitName];
     this.state = this.defaultState = state;
     this.color = unit.color;
     this.thinkTimer = new Timer(THINK_RATE);
-    this.rotateDirection = 1;
+    this.rotateDirection = 0;
     this.moveDirection = 0;
   }
+
+  findTarget() { return {} };
 
   update() {
     super.update();
@@ -188,8 +190,8 @@ class SmartUnit extends Unit {
 
     if (this.thinkTimer.elapsed()) {
       this.isFiring = false;
-      if (!this.target) this.findTarget();
-      const distFromTarget = distance(this.pos, this.target.pos);
+      const distFromTarget = distance(this.pos, player.pos);
+
       if (this.state === STATE.ATTACK) {
         const targetAngle = angleRadians(this.pos, player.pos);
         const angleDiff = this.angle - targetAngle;
@@ -221,46 +223,48 @@ class SmartUnit extends Unit {
       this.thinkTimer.set(THINK_RATE);
     }
   }
-  render() {
-    if (this.targetDest) circle(this.targetDest, vec2(50), PURPLE);
-    super.render();
-    // const targetAngle = angleRadians(this.pos, this.targetDest);
-    // text(`${this.angle} === ${targetAngle}`, this.pos, 20, 0, "black");
-    //text(str, pos, fontSize, angle, color, scaleParam = 1)
-  }
 }
 
 class EnemyUnit extends SmartUnit {
-  constructor({pos, patrolPos, team, unitName}) {
-    super({pos, patrolPos, team, unitName, state: STATE.PATROL});
+  constructor({pos, patrolPos, unitName}) {
+    super({pos, team: TEAM_ENEMY, unitName, state: STATE.PATROL});
     this.patrolPoints = [this.pos.copy(), this.pos.add(patrolPos || vec2(200))];
     this.targetDest = this.patrolPoints[1];
   }
-  findTarget() { this.target = player; }
+  findTarget() {
+    // if (this.state === STATE.ATTACK) this.target = player;
+  }
   update() {
     super.update();
+    const { patrolPoints, targetDest } = this;
     if (this.state === STATE.PATROL) {
-      const distFromTarget = distance(this.pos, this.targetDest);
-      const targetAngle = angleRadians(this.pos, this.targetDest);
-      const A = Math.floor(this.angle * 3)
-      const B = Math.floor(targetAngle * 3)
-      if (A === B) {
+      const distFromTarget = distance(this.pos, targetDest);
+      const targetAngle = angleRadians(this.pos, targetDest);
+      const angleDiff = this.angle - targetAngle;
+      if (Math.abs(angleDiff) < .3) {
         this.angle = targetAngle;//Math.floor(targetAngle * 100) / 100 + .05;
         this.moveDirection = 1;
         this.rotateDirection = 0;
       }
       else if (this.moveDirection !== 0) {
-        this.rotateDirection = this.angle > targetAngle ? 1 : -1;
-        const { patrolPoints, targetDest } = this;
-        if (distance(this.pos, this.targetDest) < 100) {
-          this.targetDest = patrolPoints[patrolPoints.findIndex(p => p.equals(this.targetDest)) + 1 % patrolPoints.length ];
-          // const newTargetAngle = angleRadians(this.pos, this.targetDest);
-          // this.moveDirection = 0;
+        // determine rotate direction (rotate -1 left or 1 right)
+        if (angleDiff > 0) this.rotateDirection = angleDiff > Math.PI ? 1 : -1;
+        else if (angleDiff < 0) this.rotateDirection = angleDiff < -Math.PI ? -1 : 1
+
+        if (distance(this.pos, targetDest) < TILE_SIZE) {
+          this.targetDest = patrolPoints[patrolPoints.findIndex(p => p.equals(targetDest)) + 1 % patrolPoints.length ];
         }
       }
       if (distFromTarget <= PLAYER_DETECT_RANGE) {
         this.state = STATE.ATTACK;
       }
     }
+  }
+  render() {
+    if (this.targetDest) circle(this.targetDest, vec2(50), PURPLE);
+    super.render();
+    // const targetAngle = angleRadians(this.pos, this.targetDest);
+    // text(`${this.angle} === ${targetAngle}`, this.pos, 20, 0, "black");
+    //text(str, pos, fontSize, angle, color, scaleParam = 1)
   }
 }

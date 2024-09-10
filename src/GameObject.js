@@ -31,9 +31,9 @@ class GameObject {
     }
     this.gridPos = getGridPos(pos);
     if (canDie && hp <= 0 && !isDead) {
-      new Explosion({pos: this.pos.copy(), size: size.scale(2), timeLen: 2, team: NO_COLLISION});
-      this.moveDirection = 0;
-      this.rotateDirection = 0;
+      new Explosion({pos: this.pos.copy(), size: size.scale(2), timeLen: 2, team: NO_COLLISION, sound: "death"});
+      // this.rotateDirection = 0;
+      this.rotateSpeed.speed = this.moveSpeed.speed = 0;
       this.isDead = true;
       this.isFiring = false;
       this.team = NO_COLLISION;

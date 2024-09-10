@@ -32,23 +32,9 @@ const MAP_DIMENSIONS = vec2(20);
 
 const SPAWN_ENEMIES = 0;
 const THINK_RATE = .02;
+const WAIT_RATE = .5;
 const PLAYER_DETECT_RANGE = 700;
 const ENEMY_ATTACK_RANGE = 300;
-
-// const renderFloor = currMap => {
-//   let tileScale, tilePos, tileSize;
-//   const size = currMap.dimensions.scale(TILE_SIZE);
-//   const HALF_TILE_VEC = vec2(HALF_TILE);
-//   for (i = currMap.dimensions.x; i--;) for (j = currMap.dimensions.y; j--;) {
-//     tilePos = vec2(i, j).scale(TILE_SIZE).add(HALF_TILE_VEC);
-//     tileSize = vec2(TILE_SIZE * .9);
-//     rect(tilePos, tileSize, 0, 0, GRAY);
-//   }
-//   const HALF_MAP_WIDTH = vec2(MAP_SIZE.x / 2);
-//   for(i=3;i--;)for(j=3;j--;){
-//     if (!(i === 1 && j === 1)) new Wall(vec2(MAP_SIZE.x * (i-1), MAP_SIZE.y * (j-1)).add(HALF_MAP_WIDTH), MAP_SIZE);
-//   }
-// };
 
 const currMap = new LevelMap({pathLen: 4, cellSize: 1e3});
 const player = new PlayerUnit(currMap.size.scale(.5), 1);
@@ -64,6 +50,7 @@ onkeydown=onkeyup=e=> {
   // - E: enter
   // - R, T, Y, X, C, V, B, N, F, J: letters
   // Ex: if(keys.r) { /* move to the right */ }
+  // Source: https://github.com/xem/miniGameTemplate/blob/gh-pages/index.html
   keys['E**S***************s****lurd************************lBCr*F***J***N**lRdT*VuXYu'[e.which-13]]=e.type[5]
 };
 
