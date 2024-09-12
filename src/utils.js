@@ -1,4 +1,5 @@
-const PI2 = Math.PI * 2;
+const { PI } = Math;
+const PI2 = PI * 2;
 const [NO_COLLISION, WALL, TEAM_FRIEND, TEAM_ENEMY, TEAM_ENV] = [0,1,2,3];
 
 const objToStr = obj => Object.keys(obj).map(key => `${key}: ${obj[key].toString()}`);
@@ -29,7 +30,7 @@ const collided = (aObj, bObj) => {
 const vec2 = (x,y=x)=>new Vec2(x, y);
 const normalizeRad = rad => rad < 0 ? rad + PI2 : rad % PI2;
 const angleRadians = (v1, v2) => v1 && v2 ? normalizeRad(Math.atan2(v2.y - v1.y, v2.x - v1.x) + Math.PI / 2) : 0;
-const distance = (v1, v2) => v1 && v2 ? Math.hypot(v2.x - v1.x, v2.y - v1.y) : 0;
+const distance = (v1, v2 = vec2(0)) => v1 && v2 ? Math.hypot(v2.x - v1.x, v2.y - v1.y) : 0;
 const formatNum = n => isNaN(n) ? n : (~~(n * 1e3) / 1e3).toString();
 
 const rand = (max, min = 0) => (Math.random() * (max - min)) + min;
@@ -41,7 +42,7 @@ const text = (str, pos, fontSize, angle, color, scaleParam = 1) => {
   x.save();
   x.translate(relativePos.x, relativePos.y);
   x.rotate(angle);
-  x.fontSize = scale * fontSize;
+  x.font = (scale * fontSize) + "px'";
   x.fillText(str, 0, 0);
   x.restore();
 };
@@ -146,6 +147,9 @@ class Speed {
 }
 
 class Timer {
+  /**
+   * @param {*} timeLeft In seconds.
+   */
   constructor(timeLeft) {
     this.time = timeLeft == undefined ? undefined : time + timeLeft;
     this.setTime = timeLeft;

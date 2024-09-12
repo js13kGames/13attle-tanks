@@ -1,24 +1,59 @@
+const DAMAGE_DELAY = .5;
 class Explosion extends GameObject {
   constructor({pos, size = 20, pushBack = 20, damage = 0, timeLen, team, sound = "boom"}) {
     super({pos, size: vec2(size), team});
-    this.timeLeft = new Timer(timeLen || .3);
+    this.timer = timeLen ? new Timer(timeLen) : undefined;
     this.pushBack = pushBack;
     this.damage = damage;
+    this.damageTimer = undefined;
     SOUND[sound]();
   }
   update() {
     super.update();
-    if (this.timeLeft.elapsed()) this.delete = true;
+    if (!this.timer || this.timer.elapsed()) this.delete = true;
   }
   collidedWith(obj) {
     if (obj instanceof Wall) return;
-    obj.hp -= this.damage;
-    obj.pos = obj.pos.move(angleRadians(this.pos, obj.pos), this.pushBack);
+    const { damage, damageTimer } = this;
+    if (!damageTimer || damageTimer.elapsed()) {
+      obj.hp -= damage;
+      showDamage(damage, obj);
+      
+      console.log("EXPLOSION damage", damage)
+      if (!damageTimer) this.damageTimer = new Timer(DAMAGE_DELAY);
+      else this.damageTimer.set(DAMAGE_DELAY);
+    }  
+    obj.pushObj(angleRadians(this.pos, obj.pos), this.pushBack);
   }
   render() {
     const halfSize = this.size.scale(.5);
     const randPos = this.pos.add(randVec(this.size).subtract(halfSize));
     circle(randPos, randVec(this.size), "red");
+  }
+}
+
+class FloatingText extends GameObject {
+  constructor(pos, str = "", fontSize = 50, color) {
+    super({ pos, color });
+    this.fontSize = fontSize;
+    this.str = str;
+    this.timer = new Timer(1);
+
+  }
+  update() {
+    super.update();
+    if (this.timer.elapsed()) this.delete = true;
+  }
+  render() {
+    const { str, pos, timer, fontSize, color } = this;
+    const perc = timer.getPercent() + .1;
+    text(str, pos.addY(-perc + 5), perc * fontSize, 0, color);
+  }
+}
+
+const showDamage = (damage, obj) => {
+  if (!isNaN(damage) && damage !== 0) {
+    new FloatingText(obj.pos.copy(), -damage, 120, RED);
   }
 }
 class Bullet extends GameObject {
@@ -33,15 +68,18 @@ class Bullet extends GameObject {
     });
     this.weapon = weapon;
     this.range = weapon.range || 40;
-    this.damage = 1;
-    this.pushBack = 10;
     SOUND[weapon.sound || "shoot"]();
   }
   collidedWith(obj) {
     const { pos, team, weapon } = this;
-    obj.hp -= this.damage;
+    const { damage } = weapon;
+    obj.hp -= damage;
+    showDamage(damage, obj);
+    console.log("bullet damage", damage)
     this.lastFlash = new Timer(.05);
-    if (weapon.explosion) new Explosion({pos: pos.copy(), team, ...weapon.explosion});
+    if (weapon.explosion) {
+      new Explosion({pos: pos.copy(), team, ...weapon.explosion });
+    }
     this.delete = true;
   }
   update() {
@@ -50,6 +88,7 @@ class Bullet extends GameObject {
     this.range -= moveSpeed.speed * tDiff;
     if (range <= 0) {
       this.delete = true;
+      // death explosion
       if (weapon.explosion) new Explosion({pos: pos.copy(), team, ...weapon.explosion});
     }
     // if out of bounds
@@ -74,23 +113,25 @@ class Wall extends GameObject {
     const { pos, center, angle, moveSpeed } = obj;
     const immovable = getObjectBounds(this);
     const { top, left, bottom, right } = getObjectBounds(obj);
-    const delta = pos.delta(angle, moveSpeed.speed).scale(tDiff);
+
+    const { pushAngle, pushBack, pushTimer } = this;
+    const pushBackDelta = pushAngle && pushBack ? pos.delta(pushAngle, pushBack * pushTimer.getPercent()) : vec2(0);
+    const delta = pos.delta(angle, moveSpeed.speed).add(pushBackDelta).scale(tDiff);
 
     const PUSH_BACK = .05;
-    const xPush = (delta.x > 0 ? 1 : -1) * PUSH_BACK;
-    const yPush = (delta.y > 0 ? 1 : -1) * PUSH_BACK;
-    if (immovable.top < bottom && delta.y > 0 && Math.abs(immovable.top - bottom) <= center.y) {
-      obj.pos = pos.addY(-(delta.y + yPush));
+    const xPush = delta.x + (delta.x > 0 ? 1 : -1) * PUSH_BACK;
+    const yPush = delta.y + (delta.y > 0 ? 1 : -1) * PUSH_BACK;
+    let overlap = vec2(0);
+    if ((immovable.top < bottom && delta.y > 0 && Math.abs(immovable.top - bottom) <= center.y)
+      || (immovable.bottom > top && delta.y < 0 && Math.abs(immovable.bottom - top) <= center.y)) {
+      obj.pos = pos.addY(-yPush);
     }
-    else if (immovable.bottom > top && delta.y < 0 && Math.abs(immovable.bottom - top) <= center.y) {
-      obj.pos = pos.addY(-(delta.y + yPush));
+    if ((immovable.left < right && delta.x > 0 && Math.abs(immovable.left - right) <= center.x)
+      || (immovable.right > left && delta.x < 0 && Math.abs(immovable.right - left) <= center.x)) {
+      obj.pos = pos.addX(-xPush);
     }
-    if (immovable.left < right && delta.x > 0 && Math.abs(immovable.left - right) <= center.x) {
-      obj.pos = pos.addX(-(delta.x + xPush));
-    }
-    else if (immovable.right > left && delta.x < 0 && Math.abs(immovable.right - left) <= center.x) {
-      obj.pos = pos.addX(-(delta.x + xPush));
-    }
+    // obj.pos = obj.pos.subtract(pushBackDelta);
+    // if (distance(pos.scale(.5)) > 10) obj.pos = pos.move(angleRadians(this.pos, pos), 10);
   }
 };
 
@@ -148,9 +189,13 @@ class Unit extends GameObject {
       cube(pos.addY(-9), vec2(40, 40), angle, vec2(20, 20), "black", 1);
     }
 
-    rect(pos, size, 0, center, color, 1, 1);
+    // show hitbox
+    if (debug) rect(pos, size, 0, center, color, 1, 1);
+
     if (hp > 0) {
-      const hpPos = pos.addX(size.x * 1.2);
+      // rect(pos.move(normalizeAngle(angle - PI), size.y * .7), size, 0, center, color, 1, 1);
+      // const hpPos = pos.addX(size.x * 1.2);
+      const hpPos = pos.move(normalizeRad(angle - Math.PI), size.y * .7);
       const hpSize = vec2(20);
       const hpDiff = maxHp - hp;
       if (hpDiff > 0) {
@@ -186,17 +231,20 @@ class SmartUnit extends Unit {
     super.update();
     this.rotate(this.rotateDirection);
     this.move(this.moveDirection);
-    if (this.isDead) return;
+    if (this.isDead) {
+      this.rotateDirection = 0;
+      this.moveDirection = 0;
+      return;
+    }
 
     if (this.thinkTimer.elapsed()) {
       this.isFiring = false;
-      const distFromTarget = distance(this.pos, player.pos);
-
       if (this.state === STATE.ATTACK) {
+        const distFromTarget = distance(this.pos, player.pos);
         const targetAngle = angleRadians(this.pos, player.pos);
-        const angleDiff = this.angle - targetAngle;
-        if (Math.abs(angleDiff) < .5) {
-          this.angle = targetAngle;//Math.floor(targetAngle * 100) / 100;
+        const angleDiff = normalizeRad(this.angle - targetAngle);
+        if (Math.abs(angleDiff) < .4) {
+          this.angle = targetAngle;
           if (distFromTarget > ENEMY_ATTACK_RANGE) {
             this.moveDirection = 1;
             this.rotateDirection = 0;
@@ -228,7 +276,7 @@ class SmartUnit extends Unit {
 class EnemyUnit extends SmartUnit {
   constructor({pos, patrolPos, unitName}) {
     super({pos, team: TEAM_ENEMY, unitName, state: STATE.PATROL});
-    this.patrolPoints = [this.pos.copy(), this.pos.add(patrolPos || vec2(200))];
+    this.patrolPoints = [this.pos.copy(), this.pos.add(patrolPos || vec2(2))];
     this.targetDest = this.patrolPoints[1];
   }
   findTarget() {
@@ -238,6 +286,7 @@ class EnemyUnit extends SmartUnit {
     super.update();
     const { patrolPoints, targetDest } = this;
     if (this.state === STATE.PATROL) {
+      console.log("patrol")
       const distFromTarget = distance(this.pos, targetDest);
       const targetAngle = angleRadians(this.pos, targetDest);
       const angleDiff = this.angle - targetAngle;
@@ -263,8 +312,5 @@ class EnemyUnit extends SmartUnit {
   render() {
     if (this.targetDest) circle(this.targetDest, vec2(50), PURPLE);
     super.render();
-    // const targetAngle = angleRadians(this.pos, this.targetDest);
-    // text(`${this.angle} === ${targetAngle}`, this.pos, 20, 0, "black");
-    //text(str, pos, fontSize, angle, color, scaleParam = 1)
   }
 }

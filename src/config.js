@@ -1,5 +1,11 @@
 const TILE_SIZE = 100;
 const HALF_TILE = TILE_SIZE / 2;
+const SCENES = {
+  START: 1,
+  LEVEL: 2,
+  GAMEOVER: 3,
+};
+const debug = 1;
 
 const SOUND = {
   "boom": () => zzfx(...[.7,,51,.03,.17,.19,2,2.1,7,-20,,,.07,,,,.17,.56,.14,.25]),
@@ -43,11 +49,11 @@ const WEAPON = {
     explosion: {
       size: 40,
       damage: 1,
-      pushBack: 50,
+      pushBack: 100,
       timeLen: .3,
     },
     firingRate: 1, // fire every {firingRate} second(s)
-    damage: 0,
+    damage: 1,
   },
   "PLASMA_GUN": {
     size: 5,
@@ -56,6 +62,7 @@ const WEAPON = {
     sound: "plasma",
     explosion: {
       size: 5,
+      pushBack: 10,
       sound: "plasmaHit",
     },
     color: YELLOW,
@@ -86,11 +93,8 @@ const UNIT = {
     size: [80, 100],
     speed: [300, 0, 600, 1000], //maxSpeed = 1, direction = 0, accelorate = 0, decelorate = accelorate
     rotateSpeed: [3, 0, 12, 20],
-    weaponName: "PLASMA_GUN",
-    hp: 3,
-    render: t => {
-
-    },
+    weaponName: "BASIC_GUN",
+    hp: 10,
   },
   "ENEMY_TANK": {
     color: ORANGE,
@@ -98,6 +102,6 @@ const UNIT = {
     speed: [100, 0, 600, 1000], //maxSpeed = 1, direction = 0, accelorate = 0, decelorate = accelorate
     rotateSpeed: [2, 0, 12, 20], // maxSpeed = 1, direction = 0, accelorate = 0, decelorate = accelorate
     weaponName: "ENEMY_GUN",
-    hp: 3,
+    hp: 5,
   },
 };
