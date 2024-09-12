@@ -4,16 +4,18 @@ class LevelMap {
     this.dimensions = vec2(levelSize);
     this.size = vec2(levelSize).scale(cellSize);
     this.route = route;
+    this.playerRouteIndex = 0;
+    this.playerRouteTimer = new Timer(1);
     this.cellSize = cellSize;
+    this.halfCell = cellSize / 2;
 
     this.walls = [];
-    const halfCell = cellSize / 2;
     //add walls
     for(i=levelMap.length;i--;){
       const px = i % levelSize;
       const py = ~~(i / levelSize)
-      const posX = (px * cellSize) + halfCell;
-      const posY = (py * cellSize) + halfCell;
+      const posX = (px * cellSize) + this.halfCell;
+      const posY = (py * cellSize) + this.halfCell;
       if (levelMap[i] === 1) this.walls.push(new Wall({pos: vec2(posX, posY), size: vec2(cellSize)}));
     }
 
@@ -29,32 +31,55 @@ class LevelMap {
 
     // populate route with enemies and stuff
     for(i=0;i<route.length;i++) {
-      const cellCenter = vec2(...route[i]).scale(cellSize).add(vec2(halfCell));
+      const cellCenter = vec2(...route[i]).scale(cellSize).add(vec2(this.halfCell));
       new EnemyUnit({
-        pos: cellCenter.addX(-halfCell * .6),
-        patrolPos: cellCenter.addX(halfCell * .5),
-        unitName: "ENEMY_TANK"
+        pos: cellCenter.addX(-this.halfCell * .3),
+        patrolPos: cellCenter.addX(cellSize * .3),
+        unitName: "ENEMY_TANK",
       })
     }
   }
 
-  // renders the floor
+  update() {
+    const { cellSize, route, playerRouteTimer } = this;
+    // where is the player currently on the route? (we'll check every second)
+    if (playerRouteTimer.elapsed()) {
+      let routeIndex = 0;
+      for (let i = 0; i < route.length; i++) {
+        if (collided(player, {
+          pos: vec2(...route[i]).scale(cellSize).add(vec2(this.halfCell)), size: vec2(cellSize)
+        })) {
+          routeIndex = i;
+          break;
+        }
+      }
+      this.playerRouteIndex = routeIndex;
+      this.playerRouteTimer.set(1);
+    }
+  }
+
   render() {
+    // renders the floor
     let tilePos;
     const HALF_TILE_VEC = vec2(HALF_TILE);
-    let i = 0;
-    while (i * TILE_SIZE < this.size.x) {
-      let j = 0;
-      while (j * TILE_SIZE < this.size.y) {
+    let i = -1;
+    while (i++ * TILE_SIZE < this.size.x) {
+      let j = -1;
+      while (j++ * TILE_SIZE < this.size.y) {
         tilePos = vec2(i, j).scale(TILE_SIZE).add(HALF_TILE_VEC);
         rect(tilePos, vec2(TILE_SIZE * .9), 0, 0, GRAY);
-        j++;
       }
-      i++;
+    }
+
+    // render lines to the next checkpoint
+    const { playerRouteIndex, route, cellSize, halfCell } = this;
+    const nextIndex = Math.min(playerRouteIndex + 1, route.length - 1);
+    if (route[nextIndex]) {
+      const targetPos = vec2(...route[nextIndex]).scale(cellSize).add(vec2(halfCell));
+      line(player.pos, targetPos, GREEN);
     }
   }
 }
-
 
 const generateMap = pathLen => {
   const levelSize = pathLen * 1.3 >> 0;
@@ -73,7 +98,7 @@ const generateMap = pathLen => {
   );
 
   const trackDir = [];
-  const route = [];
+  const route = [[pathStart.x, pathStart.y]];
 
   //drop first path
   levelMap[pathPos.y * levelSize + pathPos.x] = 0;

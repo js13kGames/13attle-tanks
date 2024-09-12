@@ -1,4 +1,4 @@
-const { PI } = Math;
+const { PI, random } = Math;
 const PI2 = PI * 2;
 const [NO_COLLISION, WALL, TEAM_FRIEND, TEAM_ENEMY, TEAM_ENV] = [0,1,2,3];
 
@@ -70,7 +70,7 @@ const rect = (pos, size, angle, center, color, scaleParam = 1, isLine) => {
 };
 
 const circle = (pos, size, color) => {
-  const scale = 1 * globalScale;
+  const scale = globalScale;
   const relativePos = pos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5))
   const scaledSize = size.scale(scale);
   // const halfScaledSize = size.scale(.5).scale(scale);
@@ -87,11 +87,15 @@ const cube = (pos, size, direction, center, color, height=1, scaleParam=1) => {
   rect(pos.addY(height* -3), size, direction, center, "gray", scaleParam, true);
 };
 const line = (startPos, endPos, color, thickness) => {
+  if (!startPos || !endPos) return;
+  const start = startPos.scale(globalScale);
+  const end = endPos.scale(globalScale);
   x.beginPath();
   x.strokeStyle = color || "red";
-  x.lineWidth = thickness || 3;
-  x.moveTo(startPos.x, startPos.y);
-  x.stroke(x.lineTo(endPos.x, endPos.y));
+  x.lineWidth = (thickness || 3) * globalScale;
+  x.moveTo(start.x, start.y);
+  x.lineTo(end.x, end.y);
+  x.stroke();
 };
 const getGridPos = pos => pos && vec2(Math.floor(pos.x / TILE_SIZE), Math.floor(pos.y / TILE_SIZE));
 

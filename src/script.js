@@ -5,6 +5,8 @@ let scene = SCENES.START;
 let cameraPos = null;
 let objList = [];
 let SCREEN_SIZE = vec2(1080);
+let shakeTimer = new Timer;
+let shakeLevel = 0;
 
 let DEBUG_MESSAGES = [];
 
@@ -12,8 +14,13 @@ const THINK_RATE = .02;
 const PLAYER_DETECT_RANGE = 700;
 const ENEMY_ATTACK_RANGE = 300;
 
-const currMap = new LevelMap({pathLen: 4, cellSize: 1e3});
-const player = new PlayerUnit(currMap.size.scale(.5), 1);
+let currMap;
+let player;
+
+const startLevel = level => {
+  currMap = new LevelMap({pathLen: 4, cellSize: 1e3, enemiesPerCell: 1});
+  player = new PlayerUnit(currMap.size.scale(.5), 1);
+};
 
 //wasd, zqsd, arrow keys, space
 // - u, l, r, d: WASD/ZQSD/arrow keys
@@ -30,14 +37,16 @@ onkeydown=onkeyup=e=>{
 
 window.addEventListener("wheel", e => {
   const direction = (e.detail < 0) ? 1 : (e.wheelDelta > 0) ? 1 : -1;
-  globalScale = Math.min(3, Math.max(0.2, globalScale + direction * .2));
+  globalScale = Math.min(3, Math.max(0.1, globalScale + direction * .2));
 });
+
+startLevel(1);
 
 /***************************/ E=t=>{x.reset(tDiff = t - time)//loop and clear canvas
 time = t;
 
 // player controls
-if (!player.isDead) {
+if (player && !player.isDead) {
   player.move(keys.u ? 1 : keys.d ? -1 : 0);
   player.rotate(keys.r ? 1 : keys.l ? -1 : 0);
   player.isFiring = keys.s;
@@ -45,8 +54,10 @@ if (!player.isDead) {
 
 // update
 objList = objList.filter(o => !o.delete).sort((a, b) => a.isDead ? -1 : (a.pos?.y - a.center.y) - (b.pos?.y - b.center.y));
-cameraPos = player.pos.copy();
+if (!shakeTimer.elapsed()) cameraPos = player.pos.copy().move(random() * PI2, shakeLevel * 20);
+else cameraPos = player.pos.copy();
 for(o of objList)o.update();
+currMap.update();
 
 //check collisions
 DEBUG_COLLISIONS = [];
@@ -64,6 +75,7 @@ if (debug) {
   x.fillStyle="black";
   let startPos = vec2(50, 30);
   [
+    `currMap.playerRouteIndex = ${currMap.playerRouteIndex}`,
     `globalScale = ${globalScale}`,
     `objList.length: ${objList.length}`,
     ...player.toString(),

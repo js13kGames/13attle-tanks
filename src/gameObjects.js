@@ -13,13 +13,12 @@ class Explosion extends GameObject {
     if (!this.timer || this.timer.elapsed()) this.delete = true;
   }
   collidedWith(obj) {
-    if (obj instanceof Wall) return;
+    if (obj instanceof Wall || this.canDie) return;
     const { damage, damageTimer } = this;
-    if (!damageTimer || damageTimer.elapsed()) {
+    if (!damageTimer && damageTimer.elapsed()) {
+      obj.lastFlash = new Timer(.04);
       obj.hp -= damage;
       showDamage(damage, obj);
-      
-      console.log("EXPLOSION damage", damage)
       if (!damageTimer) this.damageTimer = new Timer(DAMAGE_DELAY);
       else this.damageTimer.set(DAMAGE_DELAY);
     }  
@@ -37,8 +36,8 @@ class FloatingText extends GameObject {
     super({ pos, color });
     this.fontSize = fontSize;
     this.str = str;
+    this.angle = random() * PI2;
     this.timer = new Timer(1);
-
   }
   update() {
     super.update();
@@ -46,14 +45,14 @@ class FloatingText extends GameObject {
   }
   render() {
     const { str, pos, timer, fontSize, color } = this;
-    const perc = timer.getPercent() + .1;
-    text(str, pos.addY(-perc + 5), perc * fontSize, 0, color);
+    const perc = 1 - (timer.getPercent() + .05);
+    text(str, pos.move(this.angle, perc * fontSize), perc * fontSize, 0, color);
   }
 }
 
 const showDamage = (damage, obj) => {
   if (!isNaN(damage) && damage !== 0) {
-    new FloatingText(obj.pos.copy(), -damage, 120, RED);
+    new FloatingText(obj.pos.copy(), -damage, 60, RED);
   }
 }
 class Bullet extends GameObject {
@@ -73,12 +72,14 @@ class Bullet extends GameObject {
   collidedWith(obj) {
     const { pos, team, weapon } = this;
     const { damage } = weapon;
-    obj.hp -= damage;
-    showDamage(damage, obj);
-    console.log("bullet damage", damage)
-    this.lastFlash = new Timer(.05);
-    if (weapon.explosion) {
-      new Explosion({pos: pos.copy(), team, ...weapon.explosion });
+    if (this.canDie) {
+      obj.lastFlash = new Timer(.05);
+      obj.hp -= damage;
+      showDamage(damage, obj);
+      console.log("bullet damage", damage)
+      if (weapon.explosion) {
+        new Explosion({pos: pos.copy(), team, ...weapon.explosion });
+      }
     }
     this.delete = true;
   }
@@ -199,8 +200,10 @@ class Unit extends GameObject {
       const hpSize = vec2(20);
       const hpDiff = maxHp - hp;
       if (hpDiff > 0) {
-        cube(hpPos, hpSize, 1, 0, flash ? "FFF" : GREEN, maxHp * 3);
-        cube(hpPos.addY(-(maxHp - hpDiff) * 9), hpSize, 1, 0, flash ? "FFF" : RED, hpDiff * 3);
+        rect(hpPos, hpSize, angle, 0, flash ? "FFF" : GREEN, maxHp * 3);
+        rect(hpPos.addY(-(maxHp - hpDiff) * 9), hpSize, angle, 0, flash ? "FFF" : RED, hpDiff * 3);
+        // cube(hpPos, hpSize, angle, 0, flash ? "FFF" : GREEN, maxHp * 3);
+        // cube(hpPos.addY(-(maxHp - hpDiff) * 9), hpSize, angle, 0, flash ? "FFF" : RED, hpDiff * 3);
       }
     }
   }
@@ -215,10 +218,11 @@ class PlayerUnit extends Unit {
 }
 
 class SmartUnit extends Unit {
-  constructor({pos, team, unitName, state}) {
+  constructor({pos, team, unitName, state, defaultState}) {
     super({pos, angle: 1, team, unitName, state});
     const unit = UNIT[unitName];
-    this.state = this.defaultState = state;
+    this.state = state;
+    this.defaultState = defaultState;
     this.color = unit.color;
     this.thinkTimer = new Timer(THINK_RATE);
     this.rotateDirection = 0;
@@ -243,7 +247,7 @@ class SmartUnit extends Unit {
         const distFromTarget = distance(this.pos, player.pos);
         const targetAngle = angleRadians(this.pos, player.pos);
         const angleDiff = normalizeRad(this.angle - targetAngle);
-        if (Math.abs(angleDiff) < .4) {
+        if (Math.abs(angleDiff) < .3) {
           this.angle = targetAngle;
           if (distFromTarget > ENEMY_ATTACK_RANGE) {
             this.moveDirection = 1;
@@ -255,8 +259,8 @@ class SmartUnit extends Unit {
           }
         }
         // determine rotate direction (rotate -1 left or 1 right)
-        if (angleDiff > 0) this.rotateDirection = angleDiff > Math.PI ? 1 : -1;
-        else if (angleDiff < 0) this.rotateDirection = angleDiff < -Math.PI ? -1 : 1
+        if (angleDiff > 0) this.rotateDirection = angleDiff > PI ? 1 : -1;
+        else if (angleDiff < 0) this.rotateDirection = angleDiff < -PI ? -1 : 1;
 
         if (distFromTarget < ENEMY_ATTACK_RANGE) {
           this.isFiring = true;
@@ -275,9 +279,10 @@ class SmartUnit extends Unit {
 
 class EnemyUnit extends SmartUnit {
   constructor({pos, patrolPos, unitName}) {
-    super({pos, team: TEAM_ENEMY, unitName, state: STATE.PATROL});
-    this.patrolPoints = [this.pos.copy(), this.pos.add(patrolPos || vec2(2))];
-    this.targetDest = this.patrolPoints[1];
+    super({pos, team: TEAM_ENEMY, unitName, state: STATE.PATROL, defaultState: STATE.PATROL});
+    this.patrolPoints = [this.pos.copy(), patrolPos || this.pos.addX(400)];
+    this.patrolIndex = 1;
+    this.targetDest = this.patrolPoints[this.patrolIndex];
   }
   findTarget() {
     // if (this.state === STATE.ATTACK) this.target = player;
@@ -286,31 +291,31 @@ class EnemyUnit extends SmartUnit {
     super.update();
     const { patrolPoints, targetDest } = this;
     if (this.state === STATE.PATROL) {
-      console.log("patrol")
-      const distFromTarget = distance(this.pos, targetDest);
       const targetAngle = angleRadians(this.pos, targetDest);
-      const angleDiff = this.angle - targetAngle;
+      const angleDiff = normalizeRad(this.angle - targetAngle);
+
+      if (angleDiff > 0) this.rotateDirection = angleDiff > PI ? 1 : -1;
+      else if (angleDiff < 0) this.rotateDirection = angleDiff < -PI ? -1 : 1;
+
       if (Math.abs(angleDiff) < .3) {
-        this.angle = targetAngle;//Math.floor(targetAngle * 100) / 100 + .05;
+        this.angle = targetAngle;
         this.moveDirection = 1;
         this.rotateDirection = 0;
       }
-      else if (this.moveDirection !== 0) {
-        // determine rotate direction (rotate -1 left or 1 right)
-        if (angleDiff > 0) this.rotateDirection = angleDiff > Math.PI ? 1 : -1;
-        else if (angleDiff < 0) this.rotateDirection = angleDiff < -Math.PI ? -1 : 1
 
-        if (distance(this.pos, targetDest) < TILE_SIZE) {
-          this.targetDest = patrolPoints[patrolPoints.findIndex(p => p.equals(targetDest)) + 1 % patrolPoints.length ];
-        }
+      if (this.rotateDirection === 0 && this.moveDirection !== 0 && distance(this.pos, targetDest) < TILE_SIZE) {
+        this.patrolIndex = (this.patrolIndex + 1) % patrolPoints.length;
+        this.targetDest = patrolPoints[this.patrolIndex];
       }
+
+      const distFromTarget = distance(this.pos, player.pos);
       if (distFromTarget <= PLAYER_DETECT_RANGE) {
         this.state = STATE.ATTACK;
       }
     }
   }
   render() {
-    if (this.targetDest) circle(this.targetDest, vec2(50), PURPLE);
+    if (debug && this.targetDest) circle(this.targetDest, vec2(50), PURPLE);
     super.render();
   }
 }
