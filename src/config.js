@@ -1,11 +1,12 @@
 const TILE_SIZE = 100;
 const HALF_TILE = TILE_SIZE / 2;
-const SCENES = {
+const SCENE = {
   START: 1,
   LEVEL: 2,
   GAMEOVER: 3,
 };
-const debug = 1;
+const debug = 0;
+let DEBUG_CONSOLE = [];
 
 const SOUND = {
   "boom": () => zzfx(...[.7,,51,.03,.17,.19,2,2.1,7,-20,,,.07,,,,.17,.56,.14,.25]),
@@ -77,7 +78,7 @@ const UNIT = {
     speed: [300, 0, 600, 1000], //maxSpeed = 1, direction = 0, accelorate = 0, decelorate = accelorate
     rotateSpeed: [3, 0, 12, 20],
     weaponName: "BASIC_GUN",
-    hp: 100,
+    hp: 100
   },
   "ENEMY_TANK": {
     color: ORANGE,
@@ -88,3 +89,19 @@ const UNIT = {
     hp: 40,
   },
 };
+
+const ITEM = {
+  "HEALTH": {
+    label: "H",
+    color: MAROON,
+    textColor: WHITE,
+    hp: 30,
+  },
+  // "WEAPON_PLASMA_GUN": {
+  //   label: "WP",
+  //   color: PURPLE,
+  //   textColor: WHITE,
+  //   weaponName: "PLASMA_GUN",
+  //   ammo: 20,
+  // },
+}

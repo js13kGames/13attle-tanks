@@ -1,13 +1,20 @@
 class LevelMap {
-  constructor({ pathLen, cellSize = 300 }) {
+  constructor(level = 1) {
+    this.level = level;
+    this.multiplier = level * 1.2;
+    const pathLen = 4 + ~~(this.multiplier);
+    const cellSize = Math.min(1e3 * this.multiplier, 1200);
+    this.cellSize = cellSize;
+    // console.log(, this.multiplier, ~~(4 * this.multiplier))
     const { levelMap, route, levelSize } = generateMap(pathLen);
     this.dimensions = vec2(levelSize);
     this.size = vec2(levelSize).scale(cellSize);
     this.route = route;
     this.playerRouteIndex = 0;
     this.playerRouteTimer = new Timer(1);
-    this.cellSize = cellSize;
     this.halfCell = cellSize / 2;
+    this.enemies = [];
+    this.enemiesPerRoom = Math.min(~~this.multiplier, 4);
 
     this.walls = [];
     //add walls
@@ -30,13 +37,17 @@ class LevelMap {
     }
 
     // populate route with enemies and stuff
-    for(i=0;i<route.length;i++) {
+    const unitSpacing = this.cellSize * .2 ;
+    for(i=1;i<route.length;i++) {
       const cellCenter = vec2(...route[i]).scale(cellSize).add(vec2(this.halfCell));
-      new EnemyUnit({
-        pos: cellCenter.addX(-this.halfCell * .3),
-        patrolPos: cellCenter.addX(cellSize * .3),
-        unitName: "ENEMY_TANK",
-      })
+      for(let k=this.enemiesPerRoom;k--;) {
+        const pos = cellCenter.addX(unitSpacing * ((k+1) % 2)).addY(unitSpacing * ((~~(k / 2) + 1) % 2));
+        this.enemies.push(new EnemyUnit({
+          pos,
+          patrolPos: pos.addX(cellSize * .3),
+          unitName: "ENEMY_TANK",
+        }));
+      }
     }
   }
 
@@ -58,6 +69,9 @@ class LevelMap {
     }
   }
 
+  isLevelComplete() { return this.enemies.filter(e => !e.isDead).length === 0;
+     }
+
   render() {
     // renders the floor
     let tilePos;
@@ -76,7 +90,8 @@ class LevelMap {
     const nextIndex = Math.min(playerRouteIndex + 1, route.length - 1);
     if (route[nextIndex]) {
       const targetPos = vec2(...route[nextIndex]).scale(cellSize).add(vec2(halfCell));
-      line(player.pos, targetPos, GREEN);
+      const angle = angleRadians(player.pos, targetPos);
+      line(player.pos.move(angle, 200), targetPos, BROWN, 20);
     }
   }
 }

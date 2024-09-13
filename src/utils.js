@@ -1,6 +1,6 @@
 const { PI, random } = Math;
 const PI2 = PI * 2;
-const [NO_COLLISION, WALL, TEAM_FRIEND, TEAM_ENEMY, TEAM_ENV] = [0,1,2,3];
+const [NO_COLLISION, WALL, TEAM_FRIEND, TEAM_ENEMY, TEAM_ITEM] = [0,1,2,3,4];
 
 const objToStr = obj => Object.keys(obj).map(key => `${key}: ${obj[key].toString()}`);
 
@@ -20,7 +20,9 @@ const collided = (aObj, bObj) => {
   const a = getObjectBounds(aObj);
   const b = getObjectBounds(bObj);
   return (
-    !aObj.delete && !bObj.delete //centered on middle
+    !aObj.delete && !bObj.delete
+    && !aObj.isDead && !bObj.isDead
+    && (!aObj.playerIsTooFar || !bObj.playerIsTooFar)
     && aObj.team !== NO_COLLISION && bObj.team !== NO_COLLISION
     && aObj.team !== bObj.team
     && b.right > a.left && b.left < a.right
@@ -39,6 +41,7 @@ const text = (str, pos, fontSize, angle, color, scaleParam = 1) => {
   const scale = scaleParam * globalScale;
   const relativePos = pos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5))
   x.fillStyle = color;
+  x.textAlign = "center";
   x.save();
   x.translate(relativePos.x, relativePos.y);
   x.rotate(angle);
@@ -88,8 +91,9 @@ const cube = (pos, size, direction, center, color, height=1, scaleParam=1) => {
 };
 const line = (startPos, endPos, color, thickness) => {
   if (!startPos || !endPos) return;
-  const start = startPos.scale(globalScale);
-  const end = endPos.scale(globalScale);
+  const scale = globalScale;
+  const start = startPos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5));
+  const end = endPos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5));
   x.beginPath();
   x.strokeStyle = color || "red";
   x.lineWidth = (thickness || 3) * globalScale;
@@ -97,7 +101,7 @@ const line = (startPos, endPos, color, thickness) => {
   x.lineTo(end.x, end.y);
   x.stroke();
 };
-const getGridPos = pos => pos && vec2(Math.floor(pos.x / TILE_SIZE), Math.floor(pos.y / TILE_SIZE));
+const getGridPos = pos => pos && vec2(Math.round(pos.x / TILE_SIZE), Math.round(pos.y / TILE_SIZE));
 
 class Vec2 {
   constructor(x = 0, y = 0) { this.x = x; this.y = y; }
@@ -182,3 +186,10 @@ class PushBack {
       obj.pos.move(this.angle, this.pushBack);
   }
 }
+
+let shakeTimer = new Timer;
+let shakeLevel = 0;
+const shakeCam = (timerLen, level) => {
+  shakeTimer.set(timerLen);
+  shakeLevel = level;
+};

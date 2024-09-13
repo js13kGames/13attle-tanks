@@ -1,10 +1,11 @@
 class GameObject {
-  constructor({pos, size, angle = 0, center, color, moveSpeed, rotateSpeed, isSolid, team, hp, isImmovable, canDie}) {
+  constructor({pos, size, angle = 0, center, color, scale, moveSpeed, rotateSpeed, isSolid, team, hp, isImmovable, canDie}) {
     this.pos = pos;
     this.gridPos = getGridPos(pos);
     this.size = size || vec2(1);
     this.center = center || this.size.scale(.5);
     this.color = color || GRAY;
+    this.scale = scale || 1;
     this.angle = angle;
     this.moveSpeed = moveSpeed || new Speed;
     this.pushAngle = undefined;
@@ -35,8 +36,8 @@ class GameObject {
       this.angle = newAngle >= 0 ? (newAngle % PI2) : (PI2 + newAngle);
     }
     this.gridPos = getGridPos(pos);
-    new Explosion({pos: this.pos.copy(), size: size.scale(2), timeLen: 2, team: NO_COLLISION, sound: "death"});
     if (canDie && hp <= 0 && !isDead) {
+      new Explosion({pos: this.pos.copy(), size: size.scale(2), timeLen: 2, team: NO_COLLISION, sound: "death"});
       this.isDead = true;
       this.isFiring = false;
       this.team = NO_COLLISION;
@@ -48,7 +49,7 @@ class GameObject {
     this.pushBack = pushBack;
   }
   collidedWith(obj) {
-    if (debug) DEBUG_COLLISIONS.push(`${this.constructor.name} collidedWith ${obj.constructor.name}`);
+    if (debug) DEBUG_CONSOLE.push(`${this.constructor.name} collidedWith ${obj.constructor.name}`);
   }
   render() {
     const { pos, size, angle, center, color } = this;
