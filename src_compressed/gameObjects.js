@@ -91,12 +91,10 @@ const { pos, range, moveSpeed, team, weapon } = this;
 this.range -= moveSpeed.speed * tDiff;
 if (range <= 0) {
 this.delete = true;
-// death explosion
 if (weapon.explosion) new Explosion({pos: pos.copy(), team, ...weapon.explosion});
 }
-// if out of bounds
 const BOUNDS = 5e6;
-if(!this.delete) this.delete = pos.x < -BOUNDS || pos.y < -BOUNDS || pos.y > BOUNDS || pos.x  > BOUNDS;
+if(!this.delete) this.delete = pos.x < -BOUNDS || pos.y < -BOUNDS || pos.y > BOUNDS || pos.x > BOUNDS;
 }
 render() {
 cube(this.pos, this.size, this.angle, 0, "red", 3);
@@ -133,8 +131,6 @@ if ((immovable.left < right && delta.x > 0 && Math.abs(immovable.left - right) <
 || (immovable.right > left && delta.x < 0 && Math.abs(immovable.right - left) <= center.x)) {
 obj.pos = pos.addX(-xPush);
 }
-// obj.pos = obj.pos.subtract(pushBackDelta);
-// if (distance(pos.scale(.5)) > 10) obj.pos = pos.move(angleRadians(this.pos, pos), 10);
 }
 };
 
@@ -163,11 +159,11 @@ super.update();
 if (this.isFiring && this.lastFired.elapsed()) {
 const { weapon } = this;
 new Bullet({
-  pos: this.pos.addY(-9).move(this.angle, this.center.y),
-  angle: this.angle,
-  range: weapon.range,
-  team: this.team,
-  weapon,
+pos: this.pos.addY(-9).move(this.angle, this.center.y),
+angle: this.angle,
+range: weapon.range,
+team: this.team,
+weapon,
 });
 this.lastFired.set(weapon.firingRate);
 this.isFiring = false;
@@ -181,31 +177,25 @@ render() {
 const { pos, size, angle, center, color, hp, maxHp, lastFlash, scale } = this;
 const flash = hp > 0 && !!lastFlash && !lastFlash.elapsed();
 
-//body
 cube(pos, size, angle, center, flash ? WHITE : color, 3, scale || 1);
 if (hp > 0) {
-//cannon
 cube(pos.addY(-11), vec2(20, 70), angle, vec2(10, 60), flash ? WHITE : DARK_GRAY, 3, scale || 1);
-//cannon head
 cube(pos.addY(-9), vec2(40, 50), angle, vec2(20, 20), flash ? WHITE : GRAY, 4, scale || 1);
 }
 else {
 cube(pos.addY(-9), vec2(40, 40), angle, vec2(20, 20), "black", 1, scale || 1);
 }
 
-// show hitbox
 if (debug) rect(pos, size, 0, center, color, 1, 1);
 
 if (hp > 0) {
-// rect(pos.move(normalizeAngle(angle - PI), size.y * .7), size, 0, center, color, 1, 1);
-// const hpPos = pos.addX(size.x * 1.2);
 const hpPos = pos.move(normalizeRad(angle - Math.PI), size.y * .7);
 const hpSize = vec2(20);
 const hpDiff = (maxHp - hp) * .1;
 const scaledMax = maxHp * .1;
 if (hpDiff > 0) {
-  cube(hpPos, hpSize, angle, 0, flash ? "FFF" : GREEN, scaledMax * 3);
-  cube(hpPos.addY(-(scaledMax - hpDiff) * 9), hpSize, angle, 0, flash ? "FFF" : RED, hpDiff * 3);
+cube(hpPos, hpSize, angle, 0, flash ? "FFF" : GREEN, scaledMax * 3);
+cube(hpPos.addY(-(scaledMax - hpDiff) * 9), hpSize, angle, 0, flash ? "FFF" : RED, hpDiff * 3);
 }
 }
 }
@@ -249,43 +239,43 @@ super.update();
 this.rotate(this.rotateDirection);
 this.move(this.moveDirection);
 if (this.isDead) {
-  this.rotateDirection = 0;
-  this.moveDirection = 0;
-  return;
+this.rotateDirection = 0;
+this.moveDirection = 0;
+return;
 }
 
 if (this.thinkTimer.elapsed()) {
-  this.isFiring = false;
-  if (this.state === STATE.ATTACK) {
-    const distFromTarget = distance(this.pos, player.pos);
-    const targetAngle = angleRadians(this.pos, player.pos);
-    const angleDiff = normalizeRad(this.angle - targetAngle);
-    if (Math.abs(angleDiff) < .3) {
-      this.angle = targetAngle;
-      if (distFromTarget > ENEMY_ATTACK_RANGE) {
-        this.moveDirection = 1;
-        this.rotateDirection = 0;
-      }
-      else {
-        this.moveDirection = 0;
-        this.isFiring = true;
-      }
-    }
-    // determine rotate direction (rotate -1 left or 1 right)
-    if (angleDiff > 0) this.rotateDirection = angleDiff > PI ? 1 : -1;
-    else if (angleDiff < 0) this.rotateDirection = angleDiff < -PI ? -1 : 1;
+this.isFiring = false;
+if (this.state === STATE.ATTACK) {
+const distFromTarget = distance(this.pos, player.pos);
+const targetAngle = angleRadians(this.pos, player.pos);
+const angleDiff = normalizeRad(this.angle - targetAngle);
+if (Math.abs(angleDiff) < .3) {
+this.angle = targetAngle;
+if (distFromTarget > ENEMY_ATTACK_RANGE) {
+this.moveDirection = 1;
+this.rotateDirection = 0;
+}
+else {
+this.moveDirection = 0;
+this.isFiring = true;
+}
+}
+// determine rotate direction (rotate -1 left or 1 right)
+if (angleDiff > 0) this.rotateDirection = angleDiff > PI ? 1 : -1;
+else if (angleDiff < 0) this.rotateDirection = angleDiff < -PI ? -1 : 1;
 
-    if (distFromTarget < ENEMY_ATTACK_RANGE) {
-      this.isFiring = true;
-    }
-    else if (distFromTarget > PLAYER_DETECT_RANGE) {
-      this.state = this.defaultState;
-    }
-  }
-  if (distance(this.pos, player.pos) <= PLAYER_DETECT_RANGE) {
-    this.state = STATE.ATTACK;
-  }
-  this.thinkTimer.set(THINK_RATE);
+if (distFromTarget < ENEMY_ATTACK_RANGE) {
+this.isFiring = true;
+}
+else if (distFromTarget > PLAYER_DETECT_RANGE) {
+this.state = this.defaultState;
+}
+}
+if (distance(this.pos, player.pos) <= PLAYER_DETECT_RANGE) {
+this.state = STATE.ATTACK;
+}
+this.thinkTimer.set(THINK_RATE);
 }
 }
 }
@@ -311,26 +301,9 @@ new Item({pos, itemName: itemNames[random() * itemNames.length >> 0]});
 this.willDropItem = false;
 }
 if (this.state === STATE.PATROL) {
-// const targetAngle = angleRadians(this.pos, targetDest);
-// const angleDiff = normalizeRad(this.angle - targetAngle);
-
-// if (angleDiff > 0) this.rotateDirection = angleDiff > PI ? 1 : -1;
-// else if (angleDiff < 0) this.rotateDirection = angleDiff < -PI ? -1 : 1;
-
-// if (Math.abs(angleDiff) < .3) {
-//   this.angle = targetAngle;
-//   this.moveDirection = 1;
-//   this.rotateDirection = 0;
-// }
-
-// if (this.rotateDirection === 0 && this.moveDirection !== 0 && distance(this.pos, targetDest) < TILE_SIZE) {
-//   this.patrolIndex = (this.patrolIndex + 1) % patrolPoints.length;
-//   this.targetDest = patrolPoints[this.patrolIndex];
-// }
-
 const distFromTarget = distance(this.pos, player.pos);
 if (distFromTarget <= PLAYER_DETECT_RANGE) {
-  this.state = STATE.ATTACK;
+this.state = STATE.ATTACK;
 }
 }
 }

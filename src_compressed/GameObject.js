@@ -12,7 +12,7 @@ this.pushAngle = undefined;
 this.pushBack = undefined;
 this.rotateSpeed = rotateSpeed || new Speed;
 this.isSolid = isSolid;
-this.team = team || NO_COLLISION; // 0=Neutral, 1=Friendly, 2=Enemy, 3=Environment
+this.team = team || NO_COLLISION;
 this.hp = hp || 1;
 this.lastFlash = undefined;
 this.isDead = false;
@@ -28,19 +28,19 @@ update() {
 const { moveSpeed, angle, pushAngle, pushBack, pos, size, rotateSpeed, canDie, hp, isDead } = this;
 if (moveSpeed.speed !== 0) this.pos = pos.move(angle, moveSpeed.speed * tDiff);
 if (pushBack !== undefined && pushAngle !== undefined) {
-  this.pos = pos.move(pushAngle, pushBack * this.pushTimer.getPercent());
-  if (this.pushTimer.elapsed()) this.pushAngle = this.pushBack = undefined;
+ this.pos = pos.move(pushAngle, pushBack * this.pushTimer.getPercent());
+ if (this.pushTimer.elapsed()) this.pushAngle = this.pushBack = undefined;
 }
 if (rotateSpeed.speed !== 0) {
-  const newAngle = (angle + rotateSpeed.speed * tDiff);
-  this.angle = newAngle >= 0 ? (newAngle % PI2) : (PI2 + newAngle);
+ const newAngle = (angle + rotateSpeed.speed * tDiff);
+ this.angle = newAngle >= 0 ? (newAngle % PI2) : (PI2 + newAngle);
 }
 this.gridPos = getGridPos(pos);
 if (canDie && hp <= 0 && !isDead) {
-  new Explosion({pos: this.pos.copy(), size: size.scale(2), timeLen: 2, team: NO_COLLISION, sound: "death"});
-  this.isDead = true;
-  this.isFiring = false;
-  this.team = NO_COLLISION;
+ new Explosion({pos: this.pos.copy(), size: size.scale(2), timeLen: 2, team: NO_COLLISION, sound: "death"});
+ this.isDead = true;
+ this.isFiring = false;
+ this.team = NO_COLLISION;
 }
 }
 pushObj(angle, pushBack) {

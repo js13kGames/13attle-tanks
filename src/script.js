@@ -16,7 +16,7 @@ let player;
 const startLevel = level => {
   objList = [];
   eliminations = 0;
-  currMap = new LevelMap(4);
+  currMap = new LevelMap(level);
   const { route, cellSize } = currMap;
   const [startX, startY] = route[0];
   player = new PlayerUnit({pos: vec2(startX, startY).scale(cellSize).add(vec2(cellSize / 2))});

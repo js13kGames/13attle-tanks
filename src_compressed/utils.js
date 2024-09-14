@@ -76,7 +76,6 @@ const circle = (pos, size, color) => {
 const scale = globalScale;
 const relativePos = pos.scale(scale).subtract(cameraPos.scale(scale)).add(SCREEN_SIZE.scale(.5))
 const scaledSize = size.scale(scale);
-// const halfScaledSize = size.scale(.5).scale(scale);
 if (relativePos.x < -scaledSize.x || relativePos.y < -scaledSize.y
 || relativePos.x > SCREEN_SIZE.x + scaledSize.x || relativePos.y > SCREEN_SIZE.y + scaledSize.y)
 return;
@@ -105,18 +104,18 @@ const getGridPos = pos => pos && vec2(Math.round(pos.x / TILE_SIZE), Math.round(
 
 class Vec2 {
 constructor(x = 0, y = 0) { this.x = x; this.y = y; }
-copy()             { return vec2(this.x, this.y); }
-scale(s)           { return vec2(this.x * s, this.y * s); }
-add(v)             { return vec2(this.x + v.x, this.y + v.y); }
-subtract(v)        { return vec2(this.x - v.x, this.y - v.y); }
-addX(vx)           { return vec2(this.x + vx, this.y); }
-addY(vy)           { return vec2(this.x, this.y + vy); }
+copy() { return vec2(this.x, this.y); }
+scale(s) { return vec2(this.x * s, this.y * s); }
+add(v) { return vec2(this.x + v.x, this.y + v.y); }
+subtract(v) { return vec2(this.x - v.x, this.y - v.y); }
+addX(vx) { return vec2(this.x + vx, this.y); }
+addY(vy) { return vec2(this.x, this.y + vy); }
 setAngle(a=0, l=1) { this.x = l*Math.sin(a); this.y = l*Math.cos(a); return this; }
-equals(v)          { return !!v && this.x === v.x && this.y === v.y; }
-toString()         { return `x: ${~~this.x}, y: ${~~this.y}`; }
-//                 move vector in direction (angle) `a` (radians) at distance `l` (length)
-move(a, l)         { return vec2(this.x + l * Math.sin(a), this.y - l * Math.cos(a)); }
-delta(a, l)        { return vec2(l * Math.sin(a), -l * Math.cos(a)); }
+equals(v) { return !!v && this.x === v.x && this.y === v.y; }
+toString() { return `x: ${~~this.x}, y: ${~~this.y}`; }
+//  move vector in direction (angle) `a` (radians) at distance `l` (length)
+move(a, l) { return vec2(this.x + l * Math.sin(a), this.y - l * Math.cos(a)); }
+delta(a, l) { return vec2(l * Math.sin(a), -l * Math.cos(a)); }
 }
 
 class Speed {
@@ -137,11 +136,11 @@ this.speed = newSpeed < 0 ? Math.max(newSpeed, -this.maxSpeed) : Math.min(newSpe
 }
 else if (direction === 0 && this.speed !== 0) {
 if (this.decelorate > 0) {
-  const reverseDirection = this.speed < 0 ? 1 : -1;
-  this.speed += reverseDirection * this.decelorate * tDiff;
+ const reverseDirection = this.speed < 0 ? 1 : -1;
+ this.speed += reverseDirection * this.decelorate * tDiff;
 
-  if ((reverseDirection === -1 && this.speed < 0)
-    || (reverseDirection === 1 && this.speed > 0)) this.speed = 0;
+ if ((reverseDirection === -1 && this.speed < 0)
+ || (reverseDirection === 1 && this.speed > 0)) this.speed = 0;
 }
 else this.speed = 0;
 }

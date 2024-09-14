@@ -4,7 +4,6 @@ let scene = SCENE.START;
 let cameraPos = null;
 let objList = [];
 let SCREEN_SIZE = vec2(1080);
-let eliminations = 0;
 
 const THINK_RATE = .05;
 const PLAYER_DETECT_RANGE = 800;
@@ -15,22 +14,13 @@ let player;
 
 const startLevel = level => {
 objList = [];
-eliminations = 0;
-currMap = new LevelMap(4);
+currMap = new LevelMap(level);
 const { route, cellSize } = currMap;
 const [startX, startY] = route[0];
 player = new PlayerUnit({pos: vec2(startX, startY).scale(cellSize).add(vec2(cellSize / 2))});
 scene = SCENE.LEVEL;
 };
 
-//wasd, zqsd, arrow keys, space
-// - u, l, r, d: WASD/ZQSD/arrow keys
-// - s: space
-// - S: shifta sa
-// - E: enter
-// - R, T, Y, X, C, V, B, N, F, J: letters
-// Ex: if(keys.r) { /* move to the right */ }
-// Source: https://github.com/xem/miniGameTemplate/blob/gh-pages/index.html
 let keys = {};
 onkeydown=onkeyup=e=>{
 keys['E**S***************s****lurd************************lBCr*F***J***N**lRdT*VuXYu'[e.which-13]]=e.type[5]
@@ -41,10 +31,8 @@ const direction = (e.detail < 0) ? 1 : (e.wheelDelta > 0) ? 1 : -1;
 globalScale = Math.min(3, Math.max(0.1, globalScale + direction * .2));
 });
 
-/***************************/ E=t=>{x.reset(tDiff = t - time)//loop and clear canvas
+E=t=>{x.reset(tDiff = t - time)
 time = t;
-
-// player controls
 if (player && !player.isDead) {
 player.move(keys.u ? 1 : keys.d ? -1 : 0);
 player.rotate(keys.r ? 1 : keys.l ? -1 : 0);
@@ -63,19 +51,16 @@ player.render();
 if (keys.s || keys.J || keys.X) startLevel(1);
 }
 else if (scene === SCENE.LEVEL) {
-// update
 if (player) {
 objList = objList.filter(o => !o.delete).sort((a, b) => a.isDead ? -1 : (a.pos?.y - a.center.y) - (b.pos?.y - b.center.y));
 if (!shakeTimer.elapsed()) cameraPos = player.pos.copy().move(random() * PI2, shakeLevel * 20);
 else cameraPos = player.pos.copy();
 for(o of [...objList, currMap])o&&o.update();
 }
-//check collisions
 const len = objList.length;
 for(i=0;i<len-1;i++)for(j=i+1;j<len;j++)
 if(collided(o=objList[i],p=objList[j])){o.collidedWith(p);p.collidedWith(o);}
 
-// render -------------------------
 for(o of [currMap, ...objList])o.render(time);
 
 if (currMap.isLevelComplete()) startLevel(currMap.level + 1);
@@ -94,11 +79,9 @@ keys = {};
 else {
 const screenCenter = cameraPos;
 text("Level " + currMap.level, screenCenter.addY(-550), 100, 0, DARK_GRAY);
-text(`Eliminations: ${eliminations}`, screenCenter.addY(600), 60, DARK_GRAY);
 }
 }
 
-// draw stats
 if (debug) {
 x.font="16px'";
 x.fillStyle="black";
@@ -107,12 +90,9 @@ let startPos = vec2(50, 30);
 `currMap.playerRouteIndex = ${currMap?.playerRouteIndex}`,
 `globalScale = ${globalScale}`,
 `objList.length: ${objList.length}`,
-// ...player.toString(),
 keys,
 ...DEBUG_CONSOLE,
 ].map((s, i) => x.fillText(JSON.stringify(s), startPos.x, startPos.y + (i * 30)))
 
-DEBUG_CONSOLE = [];//clear console
-}
-
-/*end of loop*/}
+DEBUG_CONSOLE = [];
+}}
